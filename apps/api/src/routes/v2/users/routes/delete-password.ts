@@ -14,15 +14,15 @@ usersGroup.route(DeletePasswordRouteV2, async ({ ctx, res, body, user }) => {
     return res.badRateLimit({ timeLeft })
   }
 
-  // hasPassword is already this caller's own, and /v2/users/me hands it to
-  // them, so there is nothing for a dummy verify to hide here.
-  if (!user.hasPassword) {
-    return res.badCredentials()
-  }
-
   const credentials = await getUserCredentialsById(ctx.var.db, user.id)
   if (!credentials) {
     return res.badUnknownUser()
+  }
+
+  // No dummy verify: this is the caller's own account and /v2/users/me already
+  // tells them whether it has a password, so there is nothing to hide.
+  if (!credentials.passwordHash) {
+    return res.badCredentials()
   }
 
   if (!(await checkPassword(body.currentPassword, credentials.passwordHash))) {

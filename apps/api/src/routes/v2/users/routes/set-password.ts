@@ -14,12 +14,15 @@ usersGroup.route(SetPasswordRouteV2, async ({ ctx, res, body, user }) => {
     return res.badRateLimit({ timeLeft })
   }
 
-  // A stolen auth token must not be enough to lock the owner out.
-  if (user.hasPassword) {
-    const credentials = await getUserCredentialsById(ctx.var.db, user.id)
-    if (!credentials) {
-      return res.badUnknownUser()
-    }
+  const credentials = await getUserCredentialsById(ctx.var.db, user.id)
+  if (!credentials) {
+    return res.badUnknownUser()
+  }
+
+  // A stolen auth token must not be enough to lock the owner out. Read the
+  // hash rather than the cached user.hasPassword, which can be up to
+  // USER_CACHE_TTL stale and would skip this check.
+  if (credentials.passwordHash) {
     const ok = await checkPassword(
       body.currentPassword ?? '',
       credentials.passwordHash
