@@ -24,7 +24,7 @@ This route removes password auth from the authenticated team. It is available in
 
 Unlike most `DELETE{:http}` routes, this one takes a JSON body. `currentPassword` is always required, and a wrong value returns `<response>401 badCredentials</response>`.
 
-An account must keep at least one way to authenticate. If it has no email address and no CTFtime link, the password is the last one, so the route returns `<response>409 badZeroAuth</response>` and the password stays.
+If removing password auth would leave the team without an email address, a CTFtime link, and a password, the route returns `<response>409 badZeroAuth</response>`.
 
 ::request-body{def="DeletePasswordRouteV2" title="Request body"}
 
@@ -32,6 +32,6 @@ An account must keep at least one way to authenticate. If it has no email addres
 
 A successful request returns `<response>200 goodPasswordRemoved</response>`.
 
-Removing a password raises the account's [token epoch](/api/auth#token-revocation) exactly as setting one does, so every token issued earlier is rejected and the response carries a replacement `authToken`.
+It returns a replacement `authToken` too, because removing a password raises the [token epoch](/api/auth#token-revocation), invalidating prior tokens.
 
 ::response-body{def="DeletePasswordRouteV2" response="goodPasswordRemoved" title="Response fields"}

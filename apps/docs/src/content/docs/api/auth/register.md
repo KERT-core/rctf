@@ -92,10 +92,8 @@ For email registration, rCTF checks division ACLs before sending the verificatio
 
 ## Registering with a password
 
-`password` is a V2 field. Supplying it changes two things about the flow.
+Supplying a V2 `password` modifies registration:
 
-The account is created immediately and no verification email is sent, even on a deployment with an email provider configured. The route returns `<response>200 goodRegisterV2</response>` and the team can log in through [log in](/api/auth/login/) right away. An `email` sent alongside a password is stored on the account without being verified.
-
-The account always starts in the default division, whatever the email address says. That is `<red>defaultDivision</red>` when [configured](/configuration), and otherwise the first configured division. Division ACLs match on the email address, and on a password registration that address has not been proven, so letting it pick a division would hand out restricted divisions to anyone willing to type a sponsor's domain. Moving to another division still goes through [set email auth](/api/users/email/), which verifies the address first.
-
-A password must be 8 to 128 characters. It is not trimmed or normalized, and there are no composition rules. A password outside that range returns `<response>400 badPassword</response>`.
+* No verification email is sent. The route returns `<response>200 goodRegisterV2</response>` for immediate login. Any `email` is dropped rather than stored, because nothing proved the address; add it afterwards through [set email auth](/api/users/email/). On a deployment with no email provider there is nothing to verify against, so the address is stored as-is.
+* Accounts always start in the default division (`<red>defaultDivision</red>` or the first configured division) to prevent unverified emails from bypassing division ACLs. Moving divisions requires verifying the email via [set email auth](/api/users/email/).
+* Password must be 8–128 characters (untrimmed, unnormalized, no composition rules). Invalid lengths return `<response>400 badPassword</response>`.

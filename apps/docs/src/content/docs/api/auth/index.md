@@ -41,28 +41,21 @@ Verify tokens also depend on a one time Redis marker. The encrypted token can st
 
 ## Token revocation
 
-Every token carries the second it was minted. Each account carries a token epoch, stored as `users.token_epoch` in unix seconds and starting at `0`. An auth or team token whose mint time is at or before the account's epoch is dead, even though it still decrypts and has no expiry of its own.
+Every token carries its mint timestamp. Tokens minted at or before an account's `token_epoch` (Unix timestamp) are rejected.
 
-Setting or removing a password raises the epoch to the current second, so a credentials change ends every session the account had, not just the one that made the change. That is why [set password auth](/api/users/set-password/) and [remove password auth](/api/users/delete-password/) return a replacement `authToken`: the token used to make the request is revoked along with the rest.
+Setting or removing a password updates the epoch to the current second, ending all active sessions. Therefore, [set password](/api/users/set-password/) and [remove password](/api/users/delete-password/) return a replacement `authToken`.
 
-The check runs at every point where a token is redeemed, not only on the `Authorization` header:
+Limits to note:
+* Epoch resolution is 1 second.
+* Already-issued [external-auth](/api/external-auth/) codes ignore the epoch and can still be exchanged during their 60-second lifetime.
 
-| Redemption point | Rejected with |
-| --- | --- |
-| `Authorization: Bearer <dim><auth-token></dim>` on any authenticated route | `<response>401 badToken</response>` |
-| Team token on `<route>POST /api/v1/auth/login</route>` | `<response>401 badTokenVerification</response>` |
-| Team token on `<route>POST /api/[v2,v1]/auth/verify</route>` | `<response>401 badTokenVerification</response>` |
-
-Checking only the header would not be enough. Team tokens never expire and `<route>GET /api/v2/users/me</route>` mints a fresh one on every call, so a revoked session could otherwise trade its team token for a new auth token.
-
-Two limits are worth stating plainly. The epoch has one second of resolution, and an [external-auth](/api/external-auth/) authorization code that was already issued can still be exchanged for an access token during its 60 second lifetime, because the exchange does not consult the epoch.
-
-Nothing other than a password change raises the epoch. Rotating `tokenKey` remains the only way to invalidate tokens for every account at once.
+Only password changes raise the epoch.
 
 ## Credential strength
 
-A password is an additional way to obtain an auth token, not a stronger one. [Account recovery](/api/auth/recover/) still emails a team token that never expires, so access to a team's mailbox is still full access to the account whether or not a password is set. Removing that risk means not configuring an email provider, which in turn removes the only self-service recovery path.
+A password is an additional login method, not the stronger one. [Account recovery](/api/auth/recover/) emails a non-expiring team token, meaning mailbox access still provides full account access regardless of a password.
 
+Eliminating this risk requires disabling the email provider, which also removes self-service recovery.
 :::note[Version choice]
 
 For new clients, prefer the V2 route when both V1 and V2 exist for the same action. V2 uses the

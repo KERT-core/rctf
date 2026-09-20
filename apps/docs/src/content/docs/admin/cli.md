@@ -62,7 +62,7 @@ Lists every user holding any permissions.
 
 ### `<red>rctf</red> user set-password`
 
-Sets or resets a team's password. The argument is the **team name**.
+Sets or resets a team's password. The argument is the **team name or email address**.
 
 ```ansi
 $ <red><dim>bun</dim> rctf</red> user set-password otter-sec
@@ -71,7 +71,7 @@ Confirm password:
 Password set for 'otter-sec'. All previously issued tokens are now rejected.
 ```
 
-The password is read from stdin and asked for twice. It must be 8 to 128 characters.
+The password is read from stdin and asked for twice, never from an argument. It must be 8 to 128 characters.
 
 Setting a password invalidates the team token and auth token.
 

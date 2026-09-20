@@ -312,10 +312,8 @@ captcha:
 Available captcha actions: `<green>register</green>`, `<green>login</green>`, `<green>recover</green>`, `<green>setEmail</green>`, `<green>instancerStart</green>`, `<green>instancerExtend</green>`, `<green>avatarUpload</green>`, `<green>adminBotSubmit</green>`.
 
 :::warning
-`<green>login</green>` is new. `<red>captcha.protectedEndpoints</red>` defaults to every action, so a deployment that already configures a captcha provider and leaves the list unset will start requiring a captcha on `<route>POST /api/v2/auth/login</route>` after upgrading. Clients that log in without solving one will get `<response>403 badCaptcha</response>`. To leave login without a captcha, list `<red>protectedEndpoints</red>` explicitly and omit `<green>login</green>`.
+`<green>login</green>` is new, and this list defaults to every action. A deployment that already configures a captcha provider and leaves `<red>protectedEndpoints</red>` unset will start requiring a captcha on login after upgrading. List the endpoints explicitly to opt out.
 :::
-
-Captcha is opt-in as a whole: with no `<red>captcha.provider</red>` configured, no action is protected regardless of this list. On such a deployment the controls on password login are the per-IP and per-team-name rate limits plus a cap on concurrent password verifications. See [log in](/api/auth/login/).
 
 See [Captcha Providers](/providers/captcha) for provider-specific options.
 

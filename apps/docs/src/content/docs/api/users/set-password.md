@@ -21,16 +21,14 @@ order: 7
 
 ::route-meta{def="SetPasswordRouteV2" rateLimit="Password change bucket. Burst `3`, refill window `180000` ms per user. Consumed before anything else in the request."}
 
-This route sets the authenticated team's password, or replaces the one it already has. It is available in V2. The new password must be 8 to 128 characters, and a value outside that range returns `<response>400 badPassword</response>`.
+This route sets or replaces a team password. It is available in V2. Password must be 8-128 characters, otherwise it returns `<response>400 badPassword</response>`.
 
-`currentPassword` is required whenever the account already has a password. [Own profile](/api/users/self/) reports that as `hasPassword`. A missing or wrong `currentPassword` returns `<response>401 badCredentials</response>`, which keeps a stolen auth token from locking the real owner out. On an account with no password yet, `currentPassword` is ignored.
+If the account already has a password (`hasPassword`), `currentPassword` is required (`<response>401 badCredentials</response>` if invalid); otherwise, it is ignored.
 
 ::request-body{def="SetPasswordRouteV2" title="Request body"}
 
 #### Response
 
-A successful request returns `<response>200 goodPasswordSet</response>`.
-
-Setting a password raises the account's [token epoch](/api/auth#token-revocation), so every auth and team token issued before the change is rejected from that point on, including the one that made the request. The response carries a replacement `authToken`, and a client that does not store it will be logged out on its next call.
+A successful request returns `<response>200 goodPasswordSet</response>` and raises the [token epoch](/api/auth#token-revocation), invalidating all prior tokens. Response carries a replacement `authToken`.
 
 ::response-body{def="SetPasswordRouteV2" response="goodPasswordSet" title="Response fields"}
