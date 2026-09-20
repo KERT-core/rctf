@@ -121,6 +121,46 @@ describe('password registration', () => {
     await expectResponse(res, BadPassword)
   })
 
+  test('does not store an unverified address when email is configured', async () => {
+    // Otherwise a password registration squats any address: the victim then
+    // gets badKnownEmail and cannot register, while the attacker holds the
+    // row. The verification round-trip is what makes users.email trustworthy,
+    // and the password path skips it.
+    const previous = config.email
+    config.email = {
+      provider: { name: 'emails/smtp', options: { smtpUrl: 'smtp://x.test' } },
+      from: 'no-reply@x.test',
+    }
+
+    const name = crypto.randomUUID()
+    const victimAddress = `${crypto.randomUUID()}@example.com`
+    try {
+      const res = await post('/api/v2/auth/register', {
+        name,
+        email: victimAddress,
+        password: PASSWORD,
+      })
+      await expectResponse(res, GoodRegisterV2)
+    } finally {
+      config.email = previous
+    }
+
+    const db = getDb()
+    const stored = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.name, name))
+      .then(r => r[0])
+    expect(stored?.email).toBeNull()
+
+    const taken = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.email, victimAddress))
+      .then(r => r[0])
+    expect(taken).toBeUndefined()
+  })
+
   test('ignores division ACLs, even for an ACL-matching email', async () => {
     // acl.ts compiles ACLs once at module load, so the array has to be swapped
     // in place. Same technique as email-change-division.test.ts.

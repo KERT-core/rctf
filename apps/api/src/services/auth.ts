@@ -129,14 +129,15 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badEndpoint() }
   }
 
-  const division = allowedDivisions({
-    // A password registration creates the row immediately, so its email is
-    // unverified. Hiding it here keeps divisionACLs from handing out a
-    // restricted division for free; allowedDivisions answers defaultDivision
-    // when there is no email.
-    email: body.password ? null : body.email,
-    defaultOnly: true,
-  })[0]
+  // A password registration creates the row immediately, skipping the
+  // round-trip that proves the address. Where that round-trip exists, storing
+  // the address anyway would let anyone squat any address: the owner then gets
+  // badKnownEmail and can never register. Drop it instead; it can be added
+  // afterwards through the verified set-email flow. Without an email provider
+  // nothing is verified in the first place, so there is nothing to protect.
+  const email = body.password && config.email ? null : body.email
+
+  const division = allowedDivisions({ email, defaultOnly: true })[0]
   if (!division) {
     return { hasResult: true, response: res.badCompetitionNotAllowed() }
   }
@@ -152,7 +153,7 @@ const prepareRegistration = async (
   // Before hashing, so a rejected request never pays for an argon2.
   const conflict = await getUserByNameOrEmail(db, {
     name: body.name,
-    email: body.email,
+    email: email ?? undefined,
   })
   if (conflict) {
     if (conflict.name === body.name) {
@@ -161,9 +162,8 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badKnownEmail() }
   }
 
-  // Registration with email, and no password to skip the round-trip with:
-  if (config.email && body.email && !body.password) {
-    const emailTimeLeft = await rateLimitRegisterByEmail(redis, body.email)
+  if (config.email && email) {
+    const emailTimeLeft = await rateLimitRegisterByEmail(redis, email)
     if (emailTimeLeft) {
       return {
         hasResult: true,
@@ -172,14 +172,14 @@ const prepareRegistration = async (
     }
 
     const verification = await createPendingRegistrationVerification(db, {
-      email: body.email,
+      email,
       name: body.name,
       division: division,
     })
 
     await sendVerificationEmail(
       db,
-      body.email,
+      email,
       'register',
       verification.token,
       redis
@@ -189,7 +189,7 @@ const prepareRegistration = async (
 
   const userToCreate: UserToCreate = {
     division,
-    email: body.email,
+    email,
     name: body.name,
     ctftimeId: null,
   }
