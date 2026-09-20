@@ -217,6 +217,36 @@ describe('auth', () => {
     await expectResponse(res, BadKnownName)
   })
 
+  test('duplicate name differing only in case fails with badKnownName', async () => {
+    config.email = undefined
+
+    const mixedCase = {
+      ...generateTestUser(),
+      name: `Case-${crypto.randomUUID()}`,
+    }
+    const created = await request(app, '/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mixedCase),
+    })
+    await expectResponse(created, GoodRegister)
+
+    try {
+      const res = await request(app, '/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...generateTestUser(),
+          name: mixedCase.name.toLowerCase(),
+        }),
+      })
+
+      await expectResponse(res, BadKnownName)
+    } finally {
+      await deleteUserByEmail(mixedCase.email)
+    }
+  })
+
   test('succeeds with goodUserUpdate', async () => {
     config.email = undefined
 

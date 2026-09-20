@@ -148,7 +148,10 @@ const prepareRegistration = async (
     email: email ?? undefined,
   })
   if (conflict) {
-    if (conflict.name === body.name) {
+    // users.name is citext, so this row can be a name collision that differs
+    // only in case. Comparing case-sensitively would fall through and answer
+    // badKnownEmail for what is plainly a name conflict.
+    if (conflict.name.toLowerCase() === body.name.toLowerCase()) {
       return { hasResult: true, response: res.badKnownName() }
     }
     return { hasResult: true, response: res.badKnownEmail() }
