@@ -6,19 +6,17 @@ import { invalidateUserCache } from '../cache/auth-cache'
 import type { TypedRedis } from '../cache/scripts'
 import { createAuthTokenAt, timeNow, type Token } from '../lib/tokens'
 
-// OWASP Password Storage Cheat Sheet baseline for argon2id. Pinned rather than
-// left to the Bun default so a real check and the dummy check below cost the
-// same.
+// OWASP Password Storage Cheat Sheet baseline configuration for argon2id.
+// Pinned so a real check and the dummy check below cost the same.
 const ARGON2_PARAMS = {
   algorithm: 'argon2id',
   memoryCost: 19456,
   timeCost: 2,
 } as const
 
-// argon2id is deliberately expensive and the API is a single Bun process, so
-// cap concurrency. The slot is handed straight to the next waiter; releasing
-// it would let a new caller take it while that waiter is still a queued
-// microtask, drifting the count above the cap.
+// Cap concurrency to prevent argon2id DoS. The slot is handed straight to the
+// next waiter; releasing it would let a new caller take it while that waiter
+// is still a queued microtask, drifting the count above the cap.
 const MAX_CONCURRENT_HASHES = 4
 
 let active = 0

@@ -132,9 +132,7 @@ export const parseToken = async <Kind extends TokenKind>(
   return result?.[1] ?? null
 }
 
-// `<=`, not `<`: the epoch has one-second resolution, so a token stamped with
-// the same second would otherwise survive and go on minting fresh tokens
-// forever.
+// Use `<=`, not `<`.
 export const isTokenRevoked = (
   createdAt: number,
   tokenEpoch: number

@@ -27,9 +27,7 @@ export const getCachedUser = async (
 
   try {
     const result = JSON.parse(cached)
-    // Entries written by an older build can be missing fields this one relies
-    // on; tokenEpoch in particular would read as undefined and turn every
-    // revocation check into a no-op. Treat any unexpected shape as a miss.
+    // Cache is written by an older build.
     if (typeof result?.tokenEpoch !== 'number') {
       await redis.del(userCacheKey(userId))
       return null
