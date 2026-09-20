@@ -142,24 +142,33 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badCompetitionNotAllowed() }
   }
 
-  const ipTimeLeft = await rateLimitRegisterByIp(redis, ip)
-  if (ipTimeLeft) {
-    return {
-      hasResult: true,
-      response: res.badRateLimit({ timeLeft: ipTimeLeft }),
-    }
-  }
-
   // Before hashing, so a rejected request never pays for an argon2.
   const conflict = await getUserByNameOrEmail(db, {
     name: body.name,
     email: email ?? undefined,
   })
   if (conflict) {
-    if (conflict.name === body.name) {
+    // users.name is citext, so this row can be a name collision that differs
+    // only in case. Comparing case-sensitively would fall through and answer
+    // badKnownEmail for what is plainly a name conflict.
+    if (conflict.name.toLowerCase() === body.name.toLowerCase()) {
       return { hasResult: true, response: res.badKnownName() }
     }
     return { hasResult: true, response: res.badKnownEmail() }
+  }
+
+  // Only the paths that cost something: a verification email, or an argon2.
+  // Metering the paths v1 also serves makes this build answer badRateLimit
+  // where v1 answers goodRegister, which is a real divergence for anyone
+  // behind one NAT and not just for tests/test-against-v1.
+  if ((config.email && email) || body.password) {
+    const ipTimeLeft = await rateLimitRegisterByIp(redis, ip)
+    if (ipTimeLeft) {
+      return {
+        hasResult: true,
+        response: res.badRateLimit({ timeLeft: ipTimeLeft }),
+      }
+    }
   }
 
   if (config.email && email) {
