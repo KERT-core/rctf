@@ -5,9 +5,8 @@ import {
   parseTokenWithMultipleKinds,
   TokenKind,
 } from '../../../../lib/tokens'
-import { claimPendingRegistrationVerificationByToken } from '../../../../services/registration-verifications'
+import { claimPendingRegistration } from '../../../../services/registration-verifications'
 import {
-  createUserInternal,
   getUser,
   redeemTeamToken,
   updateUserEmail,
@@ -21,22 +20,12 @@ authGroup.route(VerifyRoute, async ({ ctx, body, res }) => {
     body.verifyToken
   )
   if (!result) {
-    const pending = await claimPendingRegistrationVerificationByToken(
-      ctx.var.db,
-      body.verifyToken
-    )
-    if (!pending) {
-      return res.badTokenVerification()
-    }
-
-    const created = await createUserInternal(ctx.var.db, {
-      division: pending.division,
-      email: pending.email,
-      name: pending.name,
-      ctftimeId: null,
-    })
+    const created = await claimPendingRegistration(ctx.var.db, body.verifyToken)
 
     if (!created.success) {
+      if (created.error === 'badToken') {
+        return res.badTokenVerification()
+      }
       if (created.error === 'badKnownEmail') {
         return res.badKnownEmail()
       }

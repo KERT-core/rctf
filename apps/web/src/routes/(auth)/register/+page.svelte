@@ -40,6 +40,9 @@
   const ctftimeLoginAction = createAsyncAction()
 
   const form = useApiForm(RegisterRouteV2, {
+    // Without a default the field is undefined rather than '', so an empty
+    // submit reports zod's invalid_type wording instead of UserEmail's.
+    defaults: { email: '' },
     onSuccess: response => {
       if (response.kind === GoodRegisterV2.kind) {
         handleRegisterSuccess(response.data.authToken, response.data.teamToken)
@@ -50,7 +53,6 @@
   })
 
   const isPending = $derived(form.submitting || ctftimeLoginAction.pending)
-  const passwordSupplied = $derived((form.data.password ?? '') !== '')
 
   function handleRegisterSuccess(authToken: string, teamToken: string) {
     setToken(authToken)
@@ -234,13 +236,7 @@
               />
             {/snippet}
           </Field>
-          <Field
-            label="Email"
-            description={passwordSupplied
-              ? 'Optional when you set a password. Without one you cannot recover the account.'
-              : undefined}
-            error={form.errors.email}
-          >
+          <Field label="Email" error={form.errors.email}>
             {#snippet children({ id, describedBy })}
               <Input
                 {id}
@@ -248,7 +244,7 @@
                 type="email"
                 placeholder="Enter your email"
                 autocomplete="email"
-                required={!passwordSupplied}
+                required
                 aria-describedby={describedBy}
                 aria-invalid={!!form.errors.email || undefined}
                 bind:value={form.data.email}

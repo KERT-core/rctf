@@ -133,7 +133,7 @@ export type UserToCreate = Pick<
 >
 
 export const createUserInternal = async (
-  db: DatabaseClient,
+  db: DatabaseClient | DatabaseTx,
   user: UserToCreate
 ): Promise<CreateUserInternalResult> => {
   let created

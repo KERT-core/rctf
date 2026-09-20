@@ -166,7 +166,11 @@
                   Verify this email address to add it to your {{ ctf_name }}
                   account:
                 </p>
-                {{ /update }}
+                {{ /update }} {{ #reset }}
+                <p style="margin: 0 0 16px">
+                  Set a new password for your {{ ctf_name }} account:
+                </p>
+                {{ /reset }}
 
                 <table
                   role="presentation"
@@ -185,7 +189,7 @@
                       "
                     >
                       <a
-                        href="{{{ origin }}}/verify?token={{ token }}"
+                        href="{{{ origin }}}/{{{ cta_path }}}?token={{ token }}"
                         target="_blank"
                         style="
                           display: inline-block;
@@ -198,20 +202,20 @@
                           text-decoration: none;
                           mso-padding-alt: 0;
                         "
-                        >Verify email</a
+                        >{{ cta_label }}</a
                       >
                     </td>
                   </tr>
                 </table>
 
                 <p style="margin: 0 0 8px">
-                  If the button does not work, use this verification link:
+                  If the button does not work, use this link:
                 </p>
                 <p style="margin: 0 0 20px">
                   <a
-                    href="{{{ origin }}}/verify?token={{ token }}"
+                    href="{{{ origin }}}/{{{ cta_path }}}?token={{ token }}"
                     style="color: #1155cc; text-decoration: underline"
-                    >Open the verification page</a
+                    >{{ cta_label }}</a
                   >
                 </p>
                 <p style="margin: 0 0 8px">

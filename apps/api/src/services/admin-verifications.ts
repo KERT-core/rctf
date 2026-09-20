@@ -38,6 +38,7 @@ export const completePendingTeamVerification = async (
     email: pending.email,
     division: pending.division,
     ctftimeId: null,
+    passwordHash: pending.passwordHash,
   })
 
   if (!result.success) {

@@ -209,6 +209,7 @@
         </button>
         {#if clientConfig.emailEnabled}
           &middot; <a href="/recover">Lost your team token?</a>
+          &middot; <a href="/reset-password">Forgot your password?</a>
         {/if}
       </footer-note>
       {#if clientConfig.ctftime}

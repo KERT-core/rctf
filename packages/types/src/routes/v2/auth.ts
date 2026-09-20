@@ -21,6 +21,7 @@ import {
   BadUnknownUser,
   GoodEmailSet,
   GoodLogin,
+  GoodPasswordSet,
   GoodRegisterV2,
   GoodVerify,
   GoodVerifyInfo,
@@ -36,7 +37,11 @@ export const RegisterRouteV2 = defineRoute({
     .object({
       email: z
         .optional(UserEmail)
-        .check(z.describe('Required when `ctftimeToken` is omitted.')),
+        .check(
+          z.describe(
+            'Required unless `ctftimeToken` is given, which carries no address.'
+          )
+        ),
       name: UserName,
       ctftimeToken: z
         .optional(z.string())
@@ -49,7 +54,7 @@ export const RegisterRouteV2 = defineRoute({
         .optional(UserPassword)
         .check(
           z.describe(
-            'Creates the account immediately with no email verification. The account always starts in the default division.'
+            'Sets the account password. Where an email provider is configured the account is created only once the emailed link is opened, exactly like a registration without a password.'
           )
         ),
       captchaCode: z
@@ -59,13 +64,17 @@ export const RegisterRouteV2 = defineRoute({
         ),
     })
     .check(
+      // An address is what makes an account recoverable, so it is required.
+      // CTFtime stays exempt because its OAuth response carries no address;
+      // `params.response` keeps a missing one answering badEmail rather than
+      // degrading to badBody, which is not in badResponses below.
       z.superRefine((data, ctx) => {
-        if (!data.email && !data.ctftimeToken && !data.password) {
+        if (!data.email && !data.ctftimeToken) {
           ctx.addIssue({
             code: 'custom',
-            message:
-              'Either email, ctftimeToken, or password must be provided.',
+            message: 'An email address must be provided.',
             path: ['email'],
+            params: { response: BadEmail },
           })
         }
       })
@@ -140,6 +149,41 @@ export const RecoverRouteV2 = defineRoute({
     BadEmail,
     BadUnknownEmail,
     BadCaptcha,
+    BadRateLimit,
+  ],
+  authRequired: false,
+})
+
+export const ResetPasswordRouteV2 = defineRoute({
+  path: '/v2/auth/reset-password',
+  method: 'POST',
+  captchaAction: ProtectedAction.Recover,
+  body: z.object({
+    email: UserEmail.check(z.describe('Where the reset link is sent.')),
+    captchaCode: z
+      .optional(z.string())
+      .check(z.describe('Checked only when captcha protects `recover{:ts}`.')),
+  }),
+  goodResponses: [GoodVerifySent],
+  badResponses: [BadEndpoint, BadEmail, BadCaptcha, BadRateLimit],
+  authRequired: false,
+})
+
+export const ConfirmPasswordResetRouteV2 = defineRoute({
+  path: '/v2/auth/reset-password/confirm',
+  method: 'POST',
+  body: z.object({
+    resetToken: z
+      .string()
+      .check(z.describe('The token carried by the reset email.')),
+    password: UserPassword,
+  }),
+  goodResponses: [GoodPasswordSet],
+  badResponses: [
+    BadEndpoint,
+    BadTokenVerification,
+    BadPassword,
+    BadUnknownUser,
     BadRateLimit,
   ],
   authRequired: false,

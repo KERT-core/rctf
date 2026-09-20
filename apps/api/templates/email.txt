@@ -7,8 +7,11 @@ Verify your email address to recover your {{{ ctf_name }}} account:
 {{ #update }}
 Verify this email address to add it to your {{{ ctf_name }}} account:
 {{ /update }}
+{{ #reset }}
+Set a new password for your {{{ ctf_name }}} account:
+{{ /reset }}
 
-{{{ origin }}}/verify?token={{{ token }}}
+{{{ origin }}}/{{{ cta_path }}}?token={{{ token }}}
 
 If you didn't attempt this, you can safely ignore this email.
 

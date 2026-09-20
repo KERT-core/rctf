@@ -9,6 +9,9 @@ export const pendingUserVerifications = pgTable(
     name: citext('name').notNull(),
     email: text().notNull(),
     division: text().notNull(),
+    // Null for email-only and admin-created verifications, which carry no
+    // credential. Set when a password registration is waiting on its address.
+    passwordHash: text('password_hash'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),

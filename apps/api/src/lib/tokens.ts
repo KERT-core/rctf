@@ -12,11 +12,16 @@ export enum TokenKind {
   Auth = 0,
   Team = 1,
   Verify = 2,
+  PasswordReset = 3,
   CtftimeAuth = 4,
 }
 
 export type AuthTokenData = string
 export type TeamTokenData = string
+// Its own kind rather than a second VerifyTokenData variant: the v2 verify
+// route applies any Verify-kind token as an email change with no inner-kind
+// guard, so a new variant would silently take that path.
+export type PasswordResetTokenData = string
 
 interface BaseVerifyTokenData {
   verifyId: string
@@ -42,6 +47,7 @@ export interface TokenDataTypes {
   [TokenKind.Auth]: AuthTokenData
   [TokenKind.Team]: TeamTokenData
   [TokenKind.Verify]: VerifyTokenData
+  [TokenKind.PasswordReset]: PasswordResetTokenData
   [TokenKind.CtftimeAuth]: CtftimeAuthTokenData
 }
 
@@ -57,6 +63,7 @@ export const tokenExpiries: Record<TokenKind, number> = {
   [TokenKind.Auth]: Infinity,
   [TokenKind.Team]: Infinity,
   [TokenKind.Verify]: Math.floor(config.loginTimeout / 1000),
+  [TokenKind.PasswordReset]: Math.floor(config.loginTimeout / 1000),
   [TokenKind.CtftimeAuth]: Math.floor(config.loginTimeout / 1000),
 }
 
