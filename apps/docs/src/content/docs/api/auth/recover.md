@@ -28,6 +28,8 @@ order: 3
 
 Starts account recovery for a team that still has access to its email inbox. When the request is accepted, the server sends a recovery email containing a team token.
 
+Recovery is not a password reset. The emailed team token grants a session, never expires, and does not touch the account's password. To replace a forgotten password, [request a password reset](/api/auth/reset-password/) instead: that route mails a single-use token which can only set a new password.
+
 The response does not reveal whether the email belongs to an account. Known and unknown addresses both return `<response>200 goodVerifySent</response>`.
 
 The recovery limits apply even when captcha is enabled. rCTF checks them before looking up the account, so rate-limit behavior cannot reveal whether an address is registered. Exceeding either limit returns `<response>429 badRateLimit</response>` with the wait in `data.timeLeft`.
@@ -62,4 +64,4 @@ When email delivery is configured and the request passes validation, the route r
 
 Recovery requires an email provider. rCTF validates the request, captcha, and rate limits before queuing the message.
 
-The team token in the recovery email does not expire and is not single use. Whoever can read the mailbox can take the account over, and setting a password does not change that. A deployment that wants to close this path has to leave `<red>email</red>` unconfigured, which disables this route entirely and leaves [`<red>rctf</red>` `user set-password`](/admin/cli#rctf-user-set-password) as the only reset path.
+Whoever can read the mailbox can take the account over, and setting a password does not change that. A deployment that wants to close this path has to leave `<red>email</red>` unconfigured. That disables this route and [password reset](/api/auth/reset-password/) together, leaving [`<red>rctf</red>` `user set-password`](/admin/cli#rctf-user-set-password) as the only way to reset the password of a team that can no longer log in.

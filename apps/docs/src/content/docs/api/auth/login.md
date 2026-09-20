@@ -1,7 +1,7 @@
 ---
 title: "`<route>POST</route>` Log in"
 description: "`<route>POST /api/[v2,v1]/auth/login</route>`"
-order: 5
+order: 7
 ---
 
 :::aside

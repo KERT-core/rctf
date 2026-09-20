@@ -1,7 +1,7 @@
 ---
 title: "`<route>GET</route>` Preview a verification token"
 description: "`<route>GET /api/v2/auth/verify-info</route>`"
-order: 4
+order: 6
 ---
 
 :::aside
