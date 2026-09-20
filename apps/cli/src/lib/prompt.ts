@@ -1,5 +1,8 @@
-const ETX = ''
-const BACKSPACE = ''
+const CTRL_C = 0x03
+const ESC = 0x1b
+const DEL = 0x08
+const BACKSPACE = 0x7f
+const SPACE = 0x20
 const SIGINT_EXIT_CODE = 130
 
 // Reads a line without echoing it. Falls back to a plain read when stdin is
@@ -28,18 +31,29 @@ export const promptHidden = async (label: string): Promise<string> => {
     }
 
     const onData = (chunk: string) => {
+      // Arrow keys and friends arrive as one escape sequence; without this
+      // their bytes land in the password.
+      if (chunk.charCodeAt(0) === ESC) {
+        return
+      }
+
       for (const char of chunk) {
         if (char === '\r' || char === '\n') {
           restore()
           resolve(value)
           return
         }
-        if (char === ETX) {
+
+        const code = char.charCodeAt(0)
+        if (code === CTRL_C) {
           restore()
           process.exit(SIGINT_EXIT_CODE)
         }
-        if (char === BACKSPACE || char === '\b') {
+        if (code === BACKSPACE || code === DEL) {
           value = value.slice(0, -1)
+          continue
+        }
+        if (code < SPACE) {
           continue
         }
         value += char
