@@ -7,6 +7,12 @@ services:
       - '127.0.0.1:6379:6379'
     volumes:
       - ./.data/redis:/data
+  mailpit:
+    image: axllent/mailpit:v1.28
+    restart: always
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
   postgres:
     image: postgres:18.0
     restart: always
