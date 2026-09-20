@@ -1,5 +1,5 @@
-import type { DatabaseClient, DatabaseTx, User } from '@rctf/db'
-import { challenges, solves, users } from '@rctf/db'
+import type { DatabaseClient, DatabaseTx, User, UserInsert } from '@rctf/db'
+import { challenges, solves, userColumns, users } from '@rctf/db'
 import { getErrorConstraint, takeUnique } from '@rctf/db/util'
 import type {
   BadEmailNoExists,
@@ -42,7 +42,7 @@ import { invalidateUserCache } from '../cache/auth-cache'
 import type { TypedRedis } from '../cache/scripts'
 import { setFilter } from '../lib/db-filters'
 import { preparedPerDb } from '../lib/prepared'
-import { createToken, TokenKind } from '../lib/tokens'
+import { createToken, isTokenRevoked, TokenKind } from '../lib/tokens'
 import { forceLeaderboardUpdate, requestChallengeRecompute } from '../workers'
 import { isDecayKind } from './challenge-queries'
 import { getCompetitionTiming } from './settings'
@@ -127,9 +127,14 @@ const createUserErrorResponse = (
   return res.badKnownName()
 }
 
+export type UserToCreate = Pick<
+  UserInsert,
+  'division' | 'email' | 'name' | 'ctftimeId' | 'passwordHash'
+>
+
 export const createUserInternal = async (
   db: DatabaseClient,
-  user: Pick<User, 'division' | 'email' | 'name' | 'ctftimeId'>
+  user: UserToCreate
 ): Promise<CreateUserInternalResult> => {
   let created
 
@@ -157,6 +162,13 @@ export const createUserInternal = async (
     if (contraintName === 'users_name_key') {
       return { success: false, error: 'badKnownName' }
     }
+    if (contraintName === 'require_email_or_ctftime_id') {
+      // Unreachable through the register routes, whose body schema requires
+      // one of the three. Getting here is a caller bug, not a user error.
+      throw new Error(
+        'createUserInternal called without email, ctftimeId, or passwordHash'
+      )
+    }
     throw error
   }
 
@@ -166,7 +178,7 @@ export const createUserInternal = async (
 export const createUser = async (
   res: CreateUserResponseHelpers,
   db: DatabaseClient,
-  user: Pick<User, 'division' | 'email' | 'name' | 'ctftimeId'>
+  user: UserToCreate
 ): Promise<
   ReturnType<CreateUserResponseHelpers[keyof CreateUserResponseHelpers]>
 > => {
@@ -182,7 +194,7 @@ export const createUser = async (
 export const createUserV2 = async (
   res: CreateUserV2ResponseHelpers,
   db: DatabaseClient,
-  user: Pick<User, 'division' | 'email' | 'name' | 'ctftimeId'>
+  user: UserToCreate
 ): Promise<
   ReturnType<CreateUserV2ResponseHelpers[keyof CreateUserV2ResponseHelpers]>
 > => {
@@ -206,12 +218,18 @@ export const updateUserInternal = async (
   db: DatabaseClient,
   redis: TypedRedis,
   user: Pick<User, 'id' | 'division'>,
-  updates: Pick<User, 'division' | 'name' | 'countryCode' | 'statusText'>,
+  updates: Partial<
+    Pick<User, 'division' | 'name' | 'countryCode' | 'statusText'>
+  >,
   opts: { bypassDivisionFreeze?: boolean } = {}
 ): Promise<UpdateUserResult> => {
   // divisions affect final standings, so they are frozen once the
   // competition ends
-  if (!opts.bypassDivisionFreeze && updates.division !== user.division) {
+  if (
+    !opts.bypassDivisionFreeze &&
+    updates.division !== undefined &&
+    updates.division !== user.division
+  ) {
     const { endTime } = await getCompetitionTiming(db, redis)
 
     if (Date.now() >= endTime) {
@@ -226,7 +244,7 @@ export const updateUserInternal = async (
       .update(users)
       .set(updates)
       .where(eq(users.id, user.id))
-      .returning()
+      .returning(userColumns)
       .then(takeUnique)
   } catch (error) {
     const contraintName = getErrorConstraint(error)
@@ -259,7 +277,7 @@ export const updateUserEmail = async (
       .update(users)
       .set(user)
       .where(eq(users.id, id))
-      .returning()
+      .returning({ id: users.id })
       .then(takeUnique)
   } catch (error) {
     const contraintName = getErrorConstraint(error)
@@ -292,7 +310,7 @@ export const deleteEmail = async (
       .update(users)
       .set({ email: null })
       .where(eq(users.id, id))
-      .returning()
+      .returning({ id: users.id })
       .then(takeUnique)
   } catch (error) {
     const contraintName = getErrorConstraint(error)
@@ -388,7 +406,7 @@ export const updateUserAvatar = async (
 
 const preparedGetUser = preparedPerDb(db =>
   db
-    .select()
+    .select(userColumns)
     .from(users)
     .where(eq(users.id, sql.placeholder('id')))
     .limit(1)
@@ -402,6 +420,28 @@ export const getUser = async (
   return await preparedGetUser(db).execute({ id }).then(takeUnique)
 }
 
+export type TeamTokenRedemption =
+  | { ok: true; user: User }
+  | { ok: false; reason: 'unknown' | 'revoked' }
+
+// v1 login, v1 verify and v2 verify all exchange a team token for a fresh auth
+// token. The epoch check belongs with that exchange, not copied into each of
+// them, where the next redemption route would forget it.
+export const redeemTeamToken = async (
+  db: DatabaseClient,
+  teamId: string,
+  createdAt: number
+): Promise<TeamTokenRedemption> => {
+  const user = await getUser(db, teamId)
+  if (!user) {
+    return { ok: false, reason: 'unknown' }
+  }
+  if (isTokenRevoked(createdAt, user.tokenEpoch)) {
+    return { ok: false, reason: 'revoked' }
+  }
+  return { ok: true, user }
+}
+
 export const getUserByNameOrEmail = async (
   db: DatabaseClient,
   options: {
@@ -410,7 +450,7 @@ export const getUserByNameOrEmail = async (
   }
 ): Promise<User | undefined> => {
   return await db
-    .select()
+    .select(userColumns)
     .from(users)
     .where(
       or(
@@ -427,7 +467,7 @@ export const getUserByEmail = async (
   email: string
 ): Promise<User | undefined> => {
   return await db
-    .select()
+    .select(userColumns)
     .from(users)
     .where(eq(users.email, email))
     .limit(1)
@@ -439,7 +479,7 @@ export const getUserByCtftimeId = async (
   ctftimeId: string
 ): Promise<User | undefined> => {
   return await db
-    .select()
+    .select(userColumns)
     .from(users)
     .where(eq(users.ctftimeId, ctftimeId))
     .limit(1)
@@ -757,7 +797,7 @@ export const setUserPerms = async (
     .update(users)
     .set({ perms })
     .where(eq(users.id, id))
-    .returning()
+    .returning(userColumns)
     .then(takeUnique)
 
   if (updated) {
