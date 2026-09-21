@@ -13,9 +13,7 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' }).child({
   module: 'emails',
 })
 
-// Frontend page each kind's call to action points at, and its button label.
-// The path used to be hardcoded in both templates, which only worked while
-// every email led to /verify.
+// Where each kind's call to action points, and what its button says.
 const callsToAction: Record<EmailKind, { path: string; label: string }> = {
   register: { path: 'verify', label: 'Verify email' },
   recover: { path: 'verify', label: 'Verify email' },
@@ -122,24 +120,22 @@ export const sendVerificationEmail = async (
   })
 }
 
-// Sending is the last step of flows whose response must not depend on it. A
-// throw here reaches the global handler as a 500, and only a registered
-// address ever gets this far, so on the recovery paths that 500 would say the
-// address exists. The operator finds the failure in the log; the requester
-// retries within their bucket. Returns whether the message went out, for
-// callers that can act on it.
+// Only a registered address reaches the send, so letting a failure 500 would
+// disclose that the address exists. Log it instead. Message only: a provider
+// error can carry the connection string.
 export const trySendVerificationEmail = async (
   db: DatabaseClient,
   to: string,
   kind: EmailKind,
   token: string,
   redis?: TypedRedis
-): Promise<boolean> => {
+): Promise<void> => {
   try {
     await sendVerificationEmail(db, to, kind, token, redis)
-    return true
   } catch (error) {
-    logger.error({ err: error, kind }, 'Failed to send a verification email')
-    return false
+    logger.error(
+      { kind, reason: error instanceof Error ? error.message : String(error) },
+      'Failed to send a verification email'
+    )
   }
 }
