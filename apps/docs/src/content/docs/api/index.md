@@ -60,11 +60,12 @@ Admin bot service routes use the same header with the shared secret from `adminB
 | Auth | No expiry, revocable | `Authorization: Bearer <auth-token>` on user routes. |
 | Team | No expiry, revocable | Account recovery and v1 login. V2 registration returns it directly when registration completes without email verification. |
 | Verify | `loginTimeout` | Email update verification. |
+| Password reset | `loginTimeout` | Carried by the reset email and spent at `<route>POST /api/v2/auth/reset-password/confirm</route>`. |
 | CTFtime auth | `loginTimeout` | CTFtime registration and login handoff. |
 
 Tokens are encrypted with AES-GCM using the configured `tokenKey`. Changing `tokenKey` invalidates every token that was issued before the rotation.
 
-Auth and team tokens are also revoked per account. Each account has a token epoch, and a token minted at or before it is rejected wherever it is redeemed. Setting or removing a password raises the epoch. See [token revocation](/api/auth#token-revocation).
+Auth, team, and password reset tokens are all revoked per account. Each account has a token epoch, and a token minted at or before it is rejected wherever it is redeemed. Setting or removing a password raises the epoch, which is also what makes a reset token single use: the reset it performs retires it. See [token revocation](/api/auth#token-revocation).
 
 ## Response format
 
@@ -134,35 +135,40 @@ Captcha is checked only for actions listed in the provider's protected actions. 
 | --- | --- |
 | `register{:ts}` | `<route>POST /api/v1/auth/register</route>`, `<route>POST /api/v2/auth/register</route>`. |
 | `login{:ts}` | `<route>POST /api/v2/auth/login</route>`. |
-| `recover{:ts}` | `<route>POST /api/v1/auth/recover</route>`, `<route>POST /api/v2/auth/recover</route>`. |
+| `recover{:ts}` | `<route>POST /api/v1/auth/recover</route>`, `<route>POST /api/v2/auth/recover</route>`, `<route>POST /api/v2/auth/reset-password</route>`. |
 | `setEmail{:ts}` | `<route>PUT /api/v1/users/me/auth/email</route>`, `<route>PUT /api/v2/users/me/auth/email</route>`. |
 | `avatarUpload{:ts}` | `<route>PATCH /api/v2/users/me/avatar</route>`. |
 | `instancerStart{:ts}` | `<route>PUT /api/v2/integrations/challs/:id/instance</route>`. |
 | `instancerExtend{:ts}` | `<route>PATCH /api/v2/integrations/challs/:id/instance</route>`. |
 | `adminBotSubmit{:ts}` | `<route>POST /api/v2/integrations/challs/:id/admin-bot</route>`. |
 
+A password reset request reuses `recover{:ts}` instead of defining an action of its own. `<route>POST /api/v2/auth/reset-password/confirm</route>` has no protected action at all: it is reached with the token from the reset email and is metered per IP instead.
+
 ## Rate limits
 
 Rate-limited routes return `<response>429 badRateLimit</response>` with `data.timeLeft`, measured in milliseconds:
 
-| Action                     | Scope              | Bucket                                 |
-| -------------------------- | ------------------ | -------------------------------------- |
-| Registration               | IP address         | Burst `20`, refill window `600000` ms. |
-| Registration email         | Email address      | Burst `2`, refill window `3600000` ms. |
-| Registration with password | Team name          | Burst `2`, refill window `3600000` ms. |
-| Account recovery           | IP address         | Burst `5`, refill window `1500000` ms. |
-| Account recovery           | Email address      | Burst `2`, refill window `3600000` ms. |
-| Password login             | IP address         | Burst `10`, refill window `100000` ms. |
-| Password login             | Team name          | Burst `5`, refill window `150000` ms.  |
-| Password set or removal    | User               | Burst `3`, refill window `180000` ms.  |
-| Flag submission            | User and challenge | Burst `5`, refill window `25000` ms.   |
-| Profile name update        | User               | Burst `3`, refill window `180000` ms.  |
-| Email change               | User               | Burst `3`, refill window `900000` ms.  |
-| Avatar upload              | User               | Burst `2`, refill window `120000` ms.  |
-| Admin bot submission       | User and challenge | Burst `1`, refill window `10000` ms.   |
-| Leaderboard search         | IP address         | Burst `3`, refill window `3000` ms.    |
+| Action                      | Scope              | Bucket                                 |
+| --------------------------- | ------------------ | -------------------------------------- |
+| Registration                | IP address         | Burst `20`, refill window `600000` ms. |
+| Registration email          | Email address      | Burst `2`, refill window `3600000` ms. |
+| Registration with password  | Team name          | Burst `2`, refill window `3600000` ms. |
+| Account recovery            | IP address         | Burst `5`, refill window `1500000` ms. |
+| Account recovery            | Email address      | Burst `2`, refill window `3600000` ms. |
+| Password reset request      | IP address         | Burst `5`, refill window `1500000` ms. |
+| Password reset request      | Email address      | Burst `2`, refill window `3600000` ms. |
+| Password reset confirmation | IP address         | Burst `10`, refill window `100000` ms. |
+| Password login              | IP address         | Burst `10`, refill window `100000` ms. |
+| Password login              | Team name          | Burst `5`, refill window `150000` ms.  |
+| Password set or removal     | User               | Burst `3`, refill window `180000` ms.  |
+| Flag submission             | User and challenge | Burst `5`, refill window `25000` ms.   |
+| Profile name update         | User               | Burst `3`, refill window `180000` ms.  |
+| Email change                | User               | Burst `3`, refill window `900000` ms.  |
+| Avatar upload               | User               | Burst `2`, refill window `120000` ms.  |
+| Admin bot submission        | User and challenge | Burst `1`, refill window `10000` ms.   |
+| Leaderboard search          | IP address         | Burst `3`, refill window `3000` ms.    |
 
-The per-IP registration bucket covers every registration path. The per-email bucket is consumed only when rCTF would send a verification email, and the per-name bucket only when a registration carries a password. Recovery checks its buckets before looking up the account, so its rate-limit behavior does not reveal whether an email is registered. Every one of these limits applies even when captcha is enabled.
+The per-IP registration bucket is consumed by the registration paths that cost something: one that would send a verification email, and one that carries a password. The per-email bucket is consumed only when rCTF would send a verification email, and the per-name bucket only when a registration carries a password. Recovery and reset requests check their buckets before looking up the account, so their rate-limit behavior does not reveal whether an email is registered. Every one of these limits applies even when captcha is enabled.
 
 The per-identifier login bucket is keyed on the submitted identifier, not on the caller, so any client can keep a given team's login rate-limited. That is deliberate. See [log in](/api/auth/login/).
 
@@ -170,7 +176,7 @@ The per-identifier login bucket is keyed on the submitted identifier, not on the
 
 | Section | Scope |
 | --- | --- |
-| [Authentication](/api/auth/) | Registration, verification, recovery, login, and token validation across V2 and V1 route contracts. |
+| [Authentication](/api/auth/) | Registration, verification, recovery, password reset, login, and token validation across V2 and V1 route contracts. |
 | [Challenges](/api/challenges/) | Public challenge listing, solves, v1 flag submission, and the dynamic-scoring webhook. |
 | [Leaderboard](/api/leaderboard/) | Current standings, graph data, challenge leaderboard metadata, search, and pagination. |
 | [Users](/api/users/) | Public profiles, self profile, updates, avatar upload, email/CTFtime auth, and team members. |

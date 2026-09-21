@@ -128,6 +128,33 @@ mock.module('@rctf/config', () => {
   return { ...env, config }
 })
 
+// The test config points smtp at a dead host. Capture the messages instead,
+// so a test can read the token a flow actually emailed.
+export type SentEmail = {
+  to: string
+  subject: string
+  html: string
+  text: string
+}
+
+export const sentEmails: SentEmail[] = []
+
+// Flipped by the tests that assert a flow survives an unreachable relay.
+export const emailFailure = { enabled: false }
+
+mock.module('../../apps/api/src/providers/instances/emails', () => {
+  return {
+    emailProvider: {
+      send: async (mail: SentEmail) => {
+        if (emailFailure.enabled) {
+          throw new Error('relay unreachable')
+        }
+        sentEmails.push(mail)
+      },
+    },
+  }
+})
+
 const mockRedisInstance = new RedisMock()
 const typedMockRedis = await loadLuaCommands(mockRedisInstance)
 

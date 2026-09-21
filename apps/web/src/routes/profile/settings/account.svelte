@@ -27,18 +27,20 @@
   import Input from '$lib/ui/input.svelte'
   import { type MenuItem } from '$lib/ui/menu.svelte'
   import Section from '$lib/ui/section.svelte'
+  import {
+    canSubmitPassword,
+    passwordMismatchError,
+  } from '$lib/forms/password-logic'
   import Spinner from '$lib/ui/spinner.svelte'
   import { createAsyncAction } from '$lib/utils/async-action.svelte'
   import {
     allowedDivisionOptions,
     canDeleteCredential,
-    canSubmitPassword,
     decideEmailBranch,
     emailButtonLabel,
     isEmailDirty,
     isEmailValid,
     isProfileDirty,
-    passwordMismatchError,
   } from './settings-logic'
 
   type Props = {

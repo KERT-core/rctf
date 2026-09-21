@@ -1,0 +1,1 @@
+ALTER TABLE "pending_user_verifications" ADD COLUMN "password_hash" text;

@@ -350,28 +350,28 @@ describe('admin users', () => {
     })
   })
 
-  test('keeps only one pending team email verification per email', async () => {
+  test('keeps only one pending team email verification per email, the first', async () => {
     const admin = await generateRealTestUser(Permissions.usersWrite)
     const db = getDb()
     const email = `${crypto.randomUUID()}@pending.test`
     const division = Object.keys(config.divisions)[0]!
 
+    const firstName = crypto.randomUUID()
     const first = await createPendingRegistrationVerification(db, {
+      name: firstName,
+      email,
+      division,
+    })
+    const second = await createPendingRegistrationVerification(db, {
       name: crypto.randomUUID(),
       email,
       division,
     })
-    const secondName = crypto.randomUUID()
-    const second = await createPendingRegistrationVerification(db, {
-      name: secondName,
-      email,
-      division,
-    })
 
-    expect(first.id).not.toBe(second.id)
-    expect(
-      await getPendingRegistrationVerification(db, first.id)
-    ).toBeUndefined()
+    // The live row wins; it used to be replaced.
+    expect(second.id).toBe(first.id)
+    expect(second.token).toBe(first.token)
+    expect(await getPendingRegistrationVerification(db, first.id)).toBeDefined()
 
     const res = await request(app, '/api/v2/admin/user-verifications', {
       headers: {
@@ -381,7 +381,7 @@ describe('admin users', () => {
     const body = await expectResponse(res, GoodAdminUserVerificationsV2)
     const forEmail = body.data.verifications.filter(v => v.email === email)
     expect(forEmail).toHaveLength(1)
-    expect(forEmail[0]).toMatchObject({ id: second.id, name: secondName })
+    expect(forEmail[0]).toMatchObject({ id: first.id, name: firstName })
   })
 
   test('verifies a stored pending team email verification token', async () => {

@@ -97,6 +97,22 @@ export const rateLimitSetPassword = (redis: TypedRedis, userId: string) =>
 export const rateLimitRegisterByEmail = (redis: TypedRedis, email: string) =>
   rateLimit(redis, `rl:REGISTER_EMAIL:${email}`, 2, 3_600_000)
 
-// burst 2, 1 per 30min per name; the password path has no email to key on
+// burst 2, 1 per 30min per name; guards the registration argon2
 export const rateLimitRegisterByName = (redis: TypedRedis, name: string) =>
   rateLimit(redis, `rl:REGISTER_NAME:${name.toLowerCase()}`, 2, 3_600_000)
+
+// burst 5, 1 per 5min per IP
+export const rateLimitResetPasswordByIp = (redis: TypedRedis, ip: string) =>
+  rateLimit(redis, `rl:RESET_PASSWORD_IP:${ip}`, 5, 1_500_000)
+
+// burst 2, 1 per 30min per email; the address arrives lowercased from UserEmail
+export const rateLimitResetPasswordByEmail = (
+  redis: TypedRedis,
+  email: string
+) => rateLimit(redis, `rl:RESET_PASSWORD_EMAIL:${email}`, 2, 3_600_000)
+
+// burst 10, 1 per 10s per IP; the only guard on the confirm step's argon2
+export const rateLimitResetPasswordConfirmByIp = (
+  redis: TypedRedis,
+  ip: string
+) => rateLimit(redis, `rl:RESET_PASSWORD_CONFIRM_IP:${ip}`, 10, 100_000)

@@ -15,6 +15,7 @@ import type { ResponseDefinition } from '@rctf/types'
 import { expect } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createToken, TokenKind } from '../../apps/api/src/lib/tokens'
+import { sentEmails } from './setup'
 
 // Use mocked createDatabase - it returns pglite instance
 const getDb = () => createDatabase(config.database.sql).db
@@ -27,6 +28,30 @@ export const clearDatabase = async () => {
   await db.delete(challenges)
   await db.delete(externalAuthClients)
   await db.delete(users)
+}
+
+// Read out of the captured plaintext, so a wrong path or token in the
+// template fails here rather than passing silently.
+export const lastEmailTo = (
+  to: string
+): { subject: string; path: string; token: string } | undefined => {
+  const mail = sentEmails.findLast(sent => sent.to === to)
+  if (!mail) {
+    return undefined
+  }
+
+  const link = mail.text.match(
+    new RegExp(`${config.origin}/([^?\\s]+)\\?token=(\\S+)`)
+  )
+  if (!link) {
+    return undefined
+  }
+
+  return {
+    subject: mail.subject,
+    path: link[1]!,
+    token: decodeURIComponent(link[2]!),
+  }
 }
 
 export const expectResponse = async <T extends ResponseDefinition<string, any>>(

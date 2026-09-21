@@ -6,8 +6,12 @@ adminGroup.route(GetAdminUserVerificationsRouteV2, async ({ res, ctx }) => {
   const verifications = await getPendingTeamVerifications(ctx.var.db)
 
   return res.goodAdminUserVerificationsV2({
+    // Listed explicitly: the row also carries a password hash.
     verifications: verifications.map(verification => ({
-      ...verification,
+      id: verification.id,
+      name: verification.name,
+      email: verification.email,
+      division: verification.division,
       createdAt: new Date(verification.createdAt).getTime(),
       expiresAt: new Date(verification.expiresAt).getTime(),
     })),

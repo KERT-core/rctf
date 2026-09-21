@@ -57,6 +57,14 @@ $ <red>bun</red> run db:migrate
 | `score`       | integer | Cached current challenge score |
 | `solve_count` | integer | Cached number of solves        |
 
+### New columns on `pending_user_verifications`
+
+| Column          | Type | Description                                                        |
+| --------------- | ---- | ------------------------------------------------------------------ |
+| `password_hash` | text | argon2id hash for a pending password registration, null when unset |
+
+Migration `0030_add_pending_password_hash` adds that one nullable column. It rewrites no rows and needs no downtime beyond the restart.
+
 ## API changes
 
 All v1 routes still work. V2 routes use the `/api/v2/...` prefix and include the following changes.
@@ -75,6 +83,8 @@ The v2 admin upload endpoint (`<route>POST /api/v2/admin/upload</route>`) takes 
 | --- | --- |
 | `<route>GET /v2/auth/verify-info</route>` | Returns info about a verification token |
 | `<route>POST /v2/auth/login</route>` | Log in with a team name and password |
+| `<route>POST /v2/auth/reset-password</route>` | Send a password reset email |
+| `<route>POST /v2/auth/reset-password/confirm</route>` | Set a new password from a reset token |
 | `<route>PUT /v2/users/me/auth/password</route>` | Set or replace the account password |
 | `<route>DELETE /v2/users/me/auth/password</route>` | Remove the account password |
 | `<route>GET /v2/leaderboard/challs</route>` | Challenge metadata with first 3 solvers per challenge |
@@ -88,6 +98,12 @@ The v2 admin upload endpoint (`<route>POST /api/v2/admin/upload</route>`) takes 
 | `<route>GET/POST /v2/admin/admin-bot/*</route>` | Admin bot job management |
 | `<route>GET/PUT/PATCH/DELETE /v2/integrations/challs/:id/instance</route>` | Challenge instance lifecycle |
 | `<route>GET/POST /v2/integrations/challs/:id/admin-bot/*</route>` | Admin bot submission and status |
+
+### Registration changes
+
+`<route>POST /v2/auth/register</route>` requires `<red>email</red>` unless the body carries a `<red>ctftimeToken</red>`, whose OAuth response has no address. A body with neither returns `<response>400 badEmail</response>`. `<route>POST /v1/auth/register</route>` is unchanged and still takes one or the other.
+
+Where an [email provider](/providers/emails) is configured, a registration that sets a password no longer creates the account in the same request. rCTF stores the submission, password hash included, and returns `<response>200 goodVerifySent</response>`; the account is created when the emailed link is opened at `<route>POST /v2/auth/verify</route>`. With no provider configured, accounts are still created immediately. Signups therefore depend on mail delivery working before you open registration.
 
 ### Response differences
 

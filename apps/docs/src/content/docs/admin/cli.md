@@ -75,7 +75,7 @@ The password is read from stdin and asked for twice, never from an argument. It 
 
 Setting a password invalidates the team token and auth token.
 
-This is the only account reset path on a deployment with no `<red>email</red>` provider configured.
+With no `<red>email</red>` provider configured, this is the only way to reset the password of a team that can no longer log in.
 
 ### `<red>rctf</red> seed`
 

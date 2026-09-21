@@ -1,8 +1,9 @@
 import { config } from '@rctf/config'
-import type { DatabaseClient } from '@rctf/db'
+import type { DatabaseClient, DatabaseTx } from '@rctf/db'
 import { pendingUserVerifications } from '@rctf/db'
 import { takeUnique } from '@rctf/db/util'
 import { and, desc, eq, gt, sql, type SQL } from 'drizzle-orm'
+import { createUserInternal } from './users'
 
 export type PendingRegistrationVerification =
   typeof pendingUserVerifications.$inferSelect
@@ -11,6 +12,7 @@ type PendingRegistrationInput = {
   name: string
   email: string
   division: string
+  passwordHash?: string | null
 }
 
 const table = pendingUserVerifications
@@ -31,15 +33,28 @@ export const createPendingRegistrationVerification = async (
   db: DatabaseClient,
   input: PendingRegistrationInput
 ): Promise<PendingRegistrationVerification> => {
+  const email = input.email.toLowerCase()
+
+  // Resend the live row instead of replacing it: the upsert below rewrites
+  // the token, so another submission would kill a link someone is about to
+  // click and overwrite its hash. The cost is that a registrant who mistyped
+  // their name or password must wait for the row to expire.
+  const active = await findActive(db, eq(table.email, email))
+  if (active) {
+    return active
+  }
+
   const row = {
     id: crypto.randomUUID(),
     token: newToken(),
+    passwordHash: null,
     ...input,
-    email: input.email.toLowerCase(),
+    email,
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + config.loginTimeout).toISOString(),
   }
 
+  // Still an upsert: any conflicting row is expired, or raced the lookup.
   const result = await db
     .insert(table)
     .values(row)
@@ -60,8 +75,10 @@ export const getPendingRegistrationVerificationByToken = (
   token: string
 ) => findActive(db, eq(table.token, token))
 
+// Takes a transaction so a caller can roll the delete back when the insert it
+// feeds fails.
 export const claimPendingRegistrationVerificationByToken = (
-  db: DatabaseClient,
+  db: DatabaseClient | DatabaseTx,
   token: string
 ): Promise<PendingRegistrationVerification | undefined> =>
   db
@@ -69,6 +86,65 @@ export const claimPendingRegistrationVerificationByToken = (
     .where(and(eq(table.token, token), notExpired))
     .returning()
     .then(takeUnique)
+
+// Registration has to check here too: a pending row holds a name no user row
+// carries yet.
+export const getActivePendingByName = (
+  db: DatabaseClient,
+  name: string
+): Promise<PendingRegistrationVerification | undefined> =>
+  findActive(db, eq(table.name, name))
+
+export type ClaimPendingRegistrationResult =
+  | { success: true; userId: string }
+  | {
+      success: false
+      error: 'badToken' | 'badKnownCtftimeId' | 'badKnownEmail' | 'badKnownName'
+    }
+
+// Claim and create together, so a create that loses a name race does not take
+// the pending row down with it. The transaction is not optional either way: a
+// failed insert aborts the Postgres transaction.
+export const claimPendingRegistration = async (
+  db: DatabaseClient,
+  token: string
+): Promise<ClaimPendingRegistrationResult> => {
+  let failure: ClaimPendingRegistrationResult | undefined
+
+  try {
+    return await db.transaction(async tx => {
+      const pending = await claimPendingRegistrationVerificationByToken(
+        tx,
+        token
+      )
+      if (!pending) {
+        return { success: false, error: 'badToken' }
+      }
+
+      const created = await createUserInternal(tx, {
+        division: pending.division,
+        email: pending.email,
+        name: pending.name,
+        ctftimeId: null,
+        passwordHash: pending.passwordHash,
+      })
+      if (created.success) {
+        return { success: true, userId: created.userId }
+      }
+
+      failure = { success: false, error: created.error }
+      tx.rollback()
+      // Unreachable: rollback throws. Keeps the callback's return type narrow.
+      return failure
+    })
+  } catch (error) {
+    // Only the rollback above is ours.
+    if (failure) {
+      return failure
+    }
+    throw error
+  }
+}
 
 export const getPendingRegistrationVerifications = async (
   db: DatabaseClient

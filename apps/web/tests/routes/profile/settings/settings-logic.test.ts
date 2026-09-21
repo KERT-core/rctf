@@ -1,13 +1,15 @@
 import {
+  canSubmitPassword,
+  passwordMismatchError,
+} from '$lib/forms/password-logic'
+import {
   allowedDivisionOptions,
   canDeleteCredential,
-  canSubmitPassword,
   decideEmailBranch,
   emailButtonLabel,
   isEmailDirty,
   isEmailValid,
   isProfileDirty,
-  passwordMismatchError,
   type ProfileCurrentUser,
 } from '$routes/profile/settings/settings-logic'
 import { describe, expect, it } from 'bun:test'

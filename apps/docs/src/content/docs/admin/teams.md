@@ -40,7 +40,8 @@ When `<red>userMembers</red>` is enabled in the configuration (which is the defa
 
 Every user account must have at least one authentication method:
 
-- An **email** address, used for registration, recovery, and email-based features.
+- An **email** address, used for registration, recovery, password resets, and email-based features.
 - A **CTFtime ID**, used for CTFtime OAuth authentication.
+- A **password**, used with the team name or email address to log in.
 
-A user can't remove their email if they have no CTFtime ID linked, and vice versa.
+A removal that would leave an account with none of them fails with `<green>badZeroAuth</green>`. A team keeping a password can drop its email, and a team keeping an email or a CTFtime ID can drop its password.

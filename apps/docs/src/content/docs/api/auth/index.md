@@ -1,6 +1,6 @@
 ---
 title: "Authentication"
-description: "Registration, verification, recovery, login, and token validation routes."
+description: "Registration, verification, recovery, password reset, login, and token validation routes."
 order: 10
 scroll: true
 aside: true
@@ -13,6 +13,8 @@ aside: true
 | [Register a team](/api/auth/register/) | `<route>POST /api/[v2,v1]/auth/register</route>` |
 | [Verify a token](/api/auth/verify/) | `<route>POST /api/[v2,v1]/auth/verify</route>` |
 | [Recover an account](/api/auth/recover/) | `<route>POST /api/[v2,v1]/auth/recover</route>` |
+| [Request a password reset](/api/auth/reset-password/) | `<route>POST /api/v2/auth/reset-password</route>` |
+| [Confirm a password reset](/api/auth/reset-password-confirm/) | `<route>POST /api/v2/auth/reset-password/confirm</route>` |
 | [Preview a verification token](/api/auth/verify-info/) | `<route>GET /api/v2/auth/verify-info</route>` |
 | [Log in with a password](/api/auth/login/) | `<route>POST /api/v2/auth/login</route>` |
 | [Log in with a token](/api/auth/login/) | `<route>POST /api/v1/auth/login</route>` |
@@ -28,14 +30,15 @@ Most authenticated API requests use the `Authorization: Bearer <dim><auth-token>
 
 The other token kinds are used while setting up, recovering, or changing a team account.
 
-| Token kind    | Lifetime             | Used by                                                         |
-| ------------- | -------------------- | --------------------------------------------------------------- |
-| `Auth`        | No expiry, revocable | `Authorization: Bearer <dim><auth-token></dim>` on user routes. |
-| `Team`        | No expiry, revocable | Account recovery, login, and token verification.                |
-| `Verify`      | `loginTimeout`       | Email updates and pending registrations. Single use.            |
-| `CtftimeAuth` | `loginTimeout`       | CTFtime registration and login handoff.                         |
+| Token kind      | Lifetime             | Used by                                                         |
+| --------------- | -------------------- | --------------------------------------------------------------- |
+| `Auth`          | No expiry, revocable | `Authorization: Bearer <dim><auth-token></dim>` on user routes. |
+| `Team`          | No expiry, revocable | Account recovery, login, and token verification.                |
+| `Verify`        | `loginTimeout`       | Email updates and pending registrations. Single use.            |
+| `PasswordReset` | `loginTimeout`       | The link in a password reset email. Single use.                 |
+| `CtftimeAuth`   | `loginTimeout`       | CTFtime registration and login handoff.                         |
 
-Tokens are encrypted with AES 256 GCM using `tokenKey`. Rotating `tokenKey` invalidates any auth, team, verify, or CTFtime handoff token issued before the rotation.
+Tokens are encrypted with AES 256 GCM using `tokenKey`. Rotating `tokenKey` invalidates any auth, team, verify, reset, or CTFtime handoff token issued before the rotation.
 
 Verify tokens also depend on a one time Redis marker. The encrypted token can still decrypt successfully after the marker has been used or expired, but the verification request will not complete.
 
@@ -43,7 +46,7 @@ Verify tokens also depend on a one time Redis marker. The encrypted token can st
 
 Every token carries its mint timestamp. Tokens minted at or before an account's `token_epoch` (Unix timestamp) are rejected.
 
-Setting or removing a password updates the epoch to the current second, ending all active sessions. Therefore, [set password](/api/users/set-password/) and [remove password](/api/users/delete-password/) return a replacement `authToken`.
+Setting, removing, or resetting a password updates the epoch to the current second, ending all active sessions. Therefore, [set password](/api/users/set-password/), [remove password](/api/users/delete-password/), and [confirm a password reset](/api/auth/reset-password-confirm/) return a replacement `authToken`. A reset token is checked against the epoch as well, which is what limits it to one use.
 
 Limits to note:
 * Epoch resolution is 1 second.

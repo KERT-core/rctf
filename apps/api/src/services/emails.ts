@@ -2,11 +2,24 @@ import path from 'node:path'
 import { config } from '@rctf/config'
 import type { DatabaseClient } from '@rctf/db'
 import mustache from 'mustache'
+import pino from 'pino'
 import type { TypedRedis } from '../cache/scripts'
 import { emailProvider } from '../providers/instances/emails'
 import { getResolvedSettings } from './settings'
 
-export type EmailKind = 'register' | 'recover' | 'update'
+export type EmailKind = 'register' | 'recover' | 'update' | 'reset'
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' }).child({
+  module: 'emails',
+})
+
+// Where each kind's call to action points, and what its button says.
+const callsToAction: Record<EmailKind, { path: string; label: string }> = {
+  register: { path: 'verify', label: 'Verify email' },
+  recover: { path: 'verify', label: 'Verify email' },
+  update: { path: 'verify', label: 'Verify email' },
+  reset: { path: 'reset-password', label: 'Reset password' },
+}
 
 // FIXME(es3n1n): this is sketchy
 // TODO(es3n1n): we might want to migrate to eta/handlebars, but that's unfortunately a breaking change
@@ -87,11 +100,15 @@ export const sendVerificationEmail = async (
     register: kind === 'register',
     recover: kind === 'recover',
     update: kind === 'update',
+    reset: kind === 'reset',
+    cta_path: callsToAction[kind].path,
+    cta_label: callsToAction[kind].label,
   }
   const subject = {
     register: `[${ctfName}] Verify your email`,
     recover: `[${ctfName}] Recover your account`,
     update: `[${ctfName}] Update your email`,
+    reset: `[${ctfName}] Reset your password`,
   }[kind]
 
   await emailProvider.send({
@@ -101,4 +118,24 @@ export const sendVerificationEmail = async (
     html: mustache.render(emailHTML, emailView),
     text: mustache.render(emailTXT, emailView),
   })
+}
+
+// Only a registered address reaches the send, so letting a failure 500 would
+// disclose that the address exists. Log it instead. Message only: a provider
+// error can carry the connection string.
+export const trySendVerificationEmail = async (
+  db: DatabaseClient,
+  to: string,
+  kind: EmailKind,
+  token: string,
+  redis?: TypedRedis
+): Promise<void> => {
+  try {
+    await sendVerificationEmail(db, to, kind, token, redis)
+  } catch (error) {
+    logger.error(
+      { kind, reason: error instanceof Error ? error.message : String(error) },
+      'Failed to send a verification email'
+    )
+  }
 }

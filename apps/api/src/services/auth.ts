@@ -10,20 +10,31 @@ import type {
   BadRateLimit,
   BadCredentials,
   BadRegistrationsDisabled,
+  BadTokenVerification,
+  BadUnknownUser,
   GoodLogin,
+  GoodPasswordSet,
   GoodRegister,
   GoodRegisterV2,
   GoodVerifySent,
   ResponseHelpers,
 } from '@rctf/types'
 import type { TypedRedis } from '../cache/scripts'
-import { createToken, parseToken, TokenKind } from '../lib/tokens'
+import {
+  createToken,
+  isTokenRevoked,
+  parseToken,
+  parseTokenWithMultipleKinds,
+  TokenKind,
+} from '../lib/tokens'
 import { allowedDivisions } from '../util/acl'
-import { sendVerificationEmail } from './emails'
+import { trySendVerificationEmail } from './emails'
 import {
   checkPassword,
+  getUserCredentialsById,
   getUserCredentialsByIdentifier,
   hashPassword,
+  setUserPassword,
 } from './passwords'
 import {
   rateLimitLoginByIdentifier,
@@ -33,8 +44,14 @@ import {
   rateLimitRegisterByEmail,
   rateLimitRegisterByIp,
   rateLimitRegisterByName,
+  rateLimitResetPasswordByEmail,
+  rateLimitResetPasswordByIp,
+  rateLimitResetPasswordConfirmByIp,
 } from './rate-limit'
-import { createPendingRegistrationVerification } from './registration-verifications'
+import {
+  createPendingRegistrationVerification,
+  getActivePendingByName,
+} from './registration-verifications'
 import {
   createUser,
   createUserV2,
@@ -90,6 +107,20 @@ type RecoverResponseHelpers = ResponseHelpers<
   [typeof BadEndpoint, typeof BadRateLimit, typeof GoodVerifySent]
 >
 
+type ResetPasswordResponseHelpers = ResponseHelpers<
+  [typeof BadEndpoint, typeof BadRateLimit, typeof GoodVerifySent]
+>
+
+type ConfirmPasswordResetResponseHelpers = ResponseHelpers<
+  [
+    typeof BadEndpoint,
+    typeof BadRateLimit,
+    typeof BadTokenVerification,
+    typeof BadUnknownUser,
+    typeof GoodPasswordSet,
+  ]
+>
+
 type LoginPasswordResponseHelpers = ResponseHelpers<
   [typeof BadCredentials, typeof BadRateLimit, typeof GoodLogin]
 >
@@ -129,13 +160,9 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badEndpoint() }
   }
 
-  // A password registration creates the row immediately, skipping the
-  // round-trip that proves the address. Where that round-trip exists, storing
-  // the address anyway would let anyone squat any address: the owner then gets
-  // badKnownEmail and can never register. Drop it instead; it can be added
-  // afterwards through the verified set-email flow. Without an email provider
-  // nothing is verified in the first place, so there is nothing to protect.
-  const email = body.password && config.email ? null : body.email
+  // Kept even when a password is set: where a provider is configured the row
+  // below stays pending until the emailed link proves the address.
+  const email = body.email ?? null
 
   const division = allowedDivisions({ email, defaultOnly: true })[0]
   if (!division) {
@@ -155,6 +182,13 @@ const prepareRegistration = async (
       return { hasResult: true, response: res.badKnownName() }
     }
     return { hasResult: true, response: res.badKnownEmail() }
+  }
+
+  // Name only. A repeat submission of the same address falls through to
+  // createPendingRegistrationVerification, which resends its live row.
+  const pendingName = await getActivePendingByName(db, body.name)
+  if (pendingName && pendingName.email !== email?.toLowerCase()) {
+    return { hasResult: true, response: res.badKnownName() }
   }
 
   // Only the paths that cost something: a verification email, or an argon2.
@@ -179,31 +213,10 @@ const prepareRegistration = async (
         response: res.badRateLimit({ timeLeft: emailTimeLeft }),
       }
     }
-
-    const verification = await createPendingRegistrationVerification(db, {
-      email,
-      name: body.name,
-      division: division,
-    })
-
-    await sendVerificationEmail(
-      db,
-      email,
-      'register',
-      verification.token,
-      redis
-    )
-    return { hasResult: true, response: res.goodVerifySent() }
   }
 
-  const userToCreate: UserToCreate = {
-    division,
-    email,
-    name: body.name,
-    ctftimeId: null,
-  }
-
-  // Registration with ctftime
+  // Before the hash, so a bad token does not pay for an argon2.
+  let ctftimeId: string | null = null
   if (body.ctftimeToken) {
     const ctftimeToken = await parseToken(
       TokenKind.CtftimeAuth,
@@ -213,9 +226,13 @@ const prepareRegistration = async (
       return { hasResult: true, response: res.badCtftimeToken() }
     }
 
-    userToCreate.ctftimeId = ctftimeToken.ctftimeId
+    ctftimeId = ctftimeToken.ctftimeId
   }
 
+  // After every gate, so a rejected request never pays for an argon2, and
+  // before the branch below, which stores the hash rather than creating the
+  // account. rateLimitRegisterByName is this call's only guard.
+  let passwordHash: string | null = null
   if (body.password) {
     const nameTimeLeft = await rateLimitRegisterByName(redis, body.name)
     if (nameTimeLeft) {
@@ -225,10 +242,38 @@ const prepareRegistration = async (
       }
     }
 
-    userToCreate.passwordHash = await hashPassword(body.password)
+    passwordHash = await hashPassword(body.password)
   }
 
-  // Registration without any verification, or if ctftime token was successfully resolved:
+  if (config.email && email) {
+    const verification = await createPendingRegistrationVerification(db, {
+      email,
+      name: body.name,
+      division: division,
+      passwordHash,
+    })
+
+    await trySendVerificationEmail(
+      db,
+      email,
+      'register',
+      verification.token,
+      redis
+    )
+    return { hasResult: true, response: res.goodVerifySent() }
+  }
+
+  // No provider, so the account is created immediately with the address as
+  // submitted. Everything that would trust it is gated on the same
+  // config.email: recovery, reset, and the division ACLs.
+  const userToCreate: UserToCreate = {
+    division,
+    email,
+    name: body.name,
+    ctftimeId,
+    passwordHash,
+  }
+
   return { hasResult: false, userToCreate }
 }
 
@@ -328,6 +373,99 @@ export const recoverUser = async (
   // v2 change: send team token, its lifetime is infinite
   const teamToken = await createToken(TokenKind.Team, user.id)
 
-  await sendVerificationEmail(db, email, 'recover', teamToken, redis)
+  await trySendVerificationEmail(db, email, 'recover', teamToken, redis)
   return res.goodVerifySent()
+}
+
+export const requestPasswordReset = async (
+  res: ResetPasswordResponseHelpers,
+  db: DatabaseClient,
+  redis: TypedRedis,
+  email: string,
+  ip: string
+): Promise<
+  ReturnType<ResetPasswordResponseHelpers[keyof ResetPasswordResponseHelpers]>
+> => {
+  if (!config.email) {
+    return res.badEndpoint()
+  }
+
+  const ipTimeLeft = await rateLimitResetPasswordByIp(redis, ip)
+  if (ipTimeLeft) {
+    return res.badRateLimit({ timeLeft: ipTimeLeft })
+  }
+
+  const emailTimeLeft = await rateLimitResetPasswordByEmail(redis, email)
+  if (emailTimeLeft) {
+    return res.badRateLimit({ timeLeft: emailTimeLeft })
+  }
+
+  const user = await getUserByEmail(db, email)
+  if (user === undefined) {
+    // Do not leak existence of user
+    return res.goodVerifySent()
+  }
+
+  const resetToken = await createToken(TokenKind.PasswordReset, user.id)
+
+  await trySendVerificationEmail(db, email, 'reset', resetToken, redis)
+  return res.goodVerifySent()
+}
+
+export const confirmPasswordReset = async (
+  res: ConfirmPasswordResetResponseHelpers,
+  db: DatabaseClient,
+  redis: TypedRedis,
+  body: { resetToken: string; password: string },
+  ip: string
+): Promise<
+  ReturnType<
+    ConfirmPasswordResetResponseHelpers[keyof ConfirmPasswordResetResponseHelpers]
+  >
+> => {
+  // Removing the provider revokes every email-derived credential.
+  if (!config.email) {
+    return res.badEndpoint()
+  }
+
+  const ipTimeLeft = await rateLimitResetPasswordConfirmByIp(redis, ip)
+  if (ipTimeLeft) {
+    return res.badRateLimit({ timeLeft: ipTimeLeft })
+  }
+
+  const parsed = await parseTokenWithMultipleKinds(
+    [TokenKind.PasswordReset],
+    body.resetToken
+  )
+  if (!parsed) {
+    return res.badTokenVerification()
+  }
+
+  const [, userId, createdAt] = parsed
+
+  // Never getUser: the hash must not reach the User type or the Redis cache.
+  const credentials = await getUserCredentialsById(db, userId)
+  if (!credentials) {
+    return res.badUnknownUser()
+  }
+
+  // Also what makes the token single-use: setUserPassword stamps the epoch
+  // with now, so this comparison rejects it afterwards.
+  if (isTokenRevoked(createdAt, credentials.tokenEpoch)) {
+    return res.badTokenVerification()
+  }
+
+  // An account with no password may set one here: the authority is the
+  // mailbox, which recoverUser already treats as enough for full access.
+  const authToken = await setUserPassword(
+    db,
+    redis,
+    credentials.id,
+    await hashPassword(body.password)
+  )
+  if (!authToken) {
+    return res.badUnknownUser()
+  }
+
+  return res.goodPasswordSet({ authToken })
 }
