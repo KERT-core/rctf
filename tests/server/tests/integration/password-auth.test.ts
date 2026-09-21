@@ -76,10 +76,8 @@ const withoutEmailProvider = async <T>(fn: () => Promise<T>): Promise<T> => {
   }
 }
 
-// A password registration now waits on its address like every other one, so
-// the account only exists after the emailed link is opened. The token comes
-// out of the captured message rather than the database, so a template that
-// emailed the wrong thing fails here too.
+// A password registration now waits on its address, so the account only
+// exists after the emailed link is opened.
 const registerWithPassword = async (
   overrides: Record<string, unknown> = {}
 ) => {
@@ -159,10 +157,8 @@ describe('password registration', () => {
   })
 
   test('carries the hash through the pending row, not around it', async () => {
-    // The pending row is the only place the hash lives between the two
-    // requests. Three call sites read that row to build a user and none of
-    // them passed the hash before; missing one produces an account that
-    // exists with no password and no error anywhere.
+    // Three call sites build a user from that row. Missing the hash in any
+    // of them produces an account with no password and no error anywhere.
     const { name } = await registerWithPassword()
 
     const login = await post('/api/v2/auth/login', {
@@ -182,9 +178,7 @@ describe('password registration', () => {
   })
 
   test('requires an email address', async () => {
-    // Without one the account is unreachable by any recovery flow. The
-    // superRefine carries params.response so this is badEmail and not
-    // badBody, which is not in the route's badResponses at all.
+    // badEmail, not badBody: badBody is not in the route's badResponses.
     const res = await post('/api/v2/auth/register', {
       name: crypto.randomUUID(),
       password: PASSWORD,
@@ -193,9 +187,7 @@ describe('password registration', () => {
   })
 
   test('resends the live pending row rather than replacing it', async () => {
-    // The upsert used to rewrite the token, so a second signup to an address
-    // killed the link the first person was about to click - and would now
-    // overwrite their password hash with a stranger's.
+    // The upsert used to rewrite the token, killing the first link.
     const email = `${crypto.randomUUID()}@password.test`
     const firstName = crypto.randomUUID()
 
@@ -228,8 +220,7 @@ describe('password registration', () => {
   })
 
   test('rejects a name another pending registration already holds', async () => {
-    // Otherwise both links work up to the claim, and whoever opens theirs
-    // second is told badKnownName by a delete that already happened.
+    // Otherwise the second clicker hits badKnownName after the delete.
     const name = crypto.randomUUID()
     const first = await post('/api/v2/auth/register', {
       name,
@@ -247,8 +238,8 @@ describe('password registration', () => {
   })
 
   test('keeps the pending row when the claim loses a name race', async () => {
-    // The claim is a DELETE ... RETURNING, so without a transaction the
-    // loser's row - and its hash - is gone before the failure is known.
+    // The claim is a DELETE ... RETURNING: without a transaction the row is
+    // gone before the failure is known.
     const db = getDb()
     const email = `${crypto.randomUUID()}@password.test`
     const name = crypto.randomUUID()
@@ -261,9 +252,8 @@ describe('password registration', () => {
     await expectResponse(res, GoodVerifySent)
     const mail = lastEmailTo(email)!
 
-    // Taken directly, because the pre-check added alongside this now rejects
-    // the same collision at registration. The claim still has to survive the
-    // narrower race it cannot see.
+    // Taken directly: the pre-check now rejects this collision at
+    // registration, but the claim still has to survive the narrower race.
     await db.insert(users).values({
       id: crypto.randomUUID(),
       name,
@@ -328,9 +318,8 @@ describe('password registration', () => {
       .where(eq(users.name, name))
       .then(r => r[0])
 
-    // The address is proven before the row exists, so there is no longer an
-    // unverified value reaching the ACLs, and pinning to defaultDivision
-    // would now be the surprising behaviour.
+    // The address is proven before the row exists, so no unverified value
+    // reaches the ACLs and pinning to defaultDivision would be surprising.
     expect(row?.division).toBe('college')
     expect(row?.division).not.toBe(defaultDivision)
   })
@@ -564,9 +553,8 @@ describe('setting a password revokes existing tokens', () => {
 
 describe('removing a password', () => {
   test('refuses when it is the only credential left', async () => {
-    // Registration always stores an address now, so this row cannot be made
-    // through the API any more. It still exists in databases that predate
-    // that, which is exactly who the guard is for.
+    // No longer reachable through the API, but it exists in databases that
+    // predate the change, which is who the guard is for.
     const db = getDb()
     const id = crypto.randomUUID()
     await db.insert(users).values({

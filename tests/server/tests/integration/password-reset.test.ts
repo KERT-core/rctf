@@ -113,8 +113,8 @@ describe('requesting a password reset', () => {
   })
 
   test('answers goodVerifySent for an address nobody holds', async () => {
-    // Identical response to the known case. Both rate-limit buckets are
-    // consumed before the lookup, so the limiter is not an oracle either.
+    // Both buckets are consumed before the lookup, so the limiter is not an
+    // oracle either.
     const unknown = `${crypto.randomUUID()}@reset.test`
     const res = await post('/api/v2/auth/reset-password', { email: unknown })
     await expectResponse(res, GoodVerifySent)
@@ -203,10 +203,7 @@ describe('confirming a password reset', () => {
   })
 
   test('cannot be replayed', async () => {
-    // Single use falls out of the epoch check rather than a stored marker:
-    // setUserPassword stamps the epoch with now, and isTokenRevoked compares
-    // inclusively, so the token that performed the reset fails on its next
-    // use.
+    // Single use falls out of the epoch check, not a stored marker.
     const { email } = await register()
     const mail = await requestReset(email)
 
@@ -244,7 +241,7 @@ describe('confirming a password reset', () => {
 
   test('sets a first password on an account that had none', async () => {
     // The authority is the mailbox, which recoverUser already treats as
-    // enough for full account access, so this grants nothing new.
+    // enough for full account access.
     const { name, email } = await register(false)
 
     const noPassword = await post('/api/v2/auth/login', {
@@ -325,8 +322,7 @@ describe('confirming a password reset', () => {
   })
 
   test('rate limits by IP', async () => {
-    // burst 10. The token is unguessable, so this meters the argon2 rather
-    // than guessing.
+    // burst 10. The token is unguessable, so this meters the argon2.
     const forged = await createToken(
       TokenKind.PasswordReset,
       crypto.randomUUID()

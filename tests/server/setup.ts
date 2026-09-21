@@ -128,10 +128,8 @@ mock.module('@rctf/config', () => {
   return { ...env, config }
 })
 
-// The test config points smtp at a dead host, so every flow that sends mail
-// would fail. Capture the messages instead: a test can then read the token a
-// flow actually emailed, rather than minting one and assuming the email
-// carried the same thing.
+// The test config points smtp at a dead host. Capture the messages instead,
+// so a test can read the token a flow actually emailed.
 export type SentEmail = {
   to: string
   subject: string

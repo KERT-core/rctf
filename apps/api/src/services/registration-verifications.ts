@@ -35,13 +35,10 @@ export const createPendingRegistrationVerification = async (
 ): Promise<PendingRegistrationVerification> => {
   const email = input.email.toLowerCase()
 
-  // Resend the live row rather than replacing it. The upsert below rewrites
-  // the token, so a second signup to an address killed the link the first
-  // person was about to click - and now it would overwrite their password
-  // hash as well. Returning the existing row means someone else's submission
-  // can neither invalidate nor rewrite a verification already in flight. The
-  // cost is that a registrant who mistyped their name or password cannot
-  // correct it until the row expires.
+  // Resend the live row instead of replacing it: the upsert below rewrites
+  // the token, so another submission would kill a link someone is about to
+  // click and overwrite its hash. The cost is that a registrant who mistyped
+  // their name or password must wait for the row to expire.
   const active = await findActive(db, eq(table.email, email))
   if (active) {
     return active
@@ -57,8 +54,7 @@ export const createPendingRegistrationVerification = async (
     expiresAt: new Date(Date.now() + config.loginTimeout).toISOString(),
   }
 
-  // Still an upsert: the conflicting row is expired, or was inserted between
-  // the lookup above and here.
+  // Still an upsert: any conflicting row is expired, or raced the lookup.
   const result = await db
     .insert(table)
     .values(row)
@@ -79,10 +75,8 @@ export const getPendingRegistrationVerificationByToken = (
   token: string
 ) => findActive(db, eq(table.token, token))
 
-// Takes a transaction so the caller can roll the delete back when the user
-// row it feeds fails to insert. Without that, whichever of two same-name
-// registrants clicks second loses their row - and its password hash - to a
-// badKnownName that leaves nothing to retry with.
+// Takes a transaction so a caller can roll the delete back when the insert it
+// feeds fails.
 export const claimPendingRegistrationVerificationByToken = (
   db: DatabaseClient | DatabaseTx,
   token: string
@@ -93,9 +87,8 @@ export const claimPendingRegistrationVerificationByToken = (
     .returning()
     .then(takeUnique)
 
-// A pending row holds a name and an address that no user row carries yet, so
-// registration has to check here too or it races the verification it already
-// sent someone else.
+// Registration has to check here too: a pending row holds a name no user row
+// carries yet.
 export const getActivePendingByName = (
   db: DatabaseClient,
   name: string
@@ -110,9 +103,8 @@ export type ClaimPendingRegistrationResult =
     }
 
 // Claim and create together, so a create that loses a name race does not take
-// the pending row - and the password hash it now carries - down with it. The
-// transaction is not optional either way: a failed insert aborts the Postgres
-// transaction, so the claimed delete could never have been committed.
+// the pending row down with it. The transaction is not optional either way: a
+// failed insert aborts the Postgres transaction.
 export const claimPendingRegistration = async (
   db: DatabaseClient,
   token: string
@@ -142,13 +134,11 @@ export const claimPendingRegistration = async (
 
       failure = { success: false, error: created.error }
       tx.rollback()
-      // Unreachable: rollback throws. Present so the callback's return type
-      // stays ClaimPendingRegistrationResult rather than widening to include
-      // undefined.
+      // Unreachable: rollback throws. Keeps the callback's return type narrow.
       return failure
     })
   } catch (error) {
-    // Only the rollback above is ours; anything else is a real failure.
+    // Only the rollback above is ours.
     if (failure) {
       return failure
     }

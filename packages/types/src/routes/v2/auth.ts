@@ -64,10 +64,8 @@ export const RegisterRouteV2 = defineRoute({
         ),
     })
     .check(
-      // An address is what makes an account recoverable, so it is required.
-      // CTFtime stays exempt because its OAuth response carries no address;
-      // `params.response` keeps a missing one answering badEmail rather than
-      // degrading to badBody, which is not in badResponses below.
+      // CTFtime is exempt because its OAuth response carries no address.
+      // params.response keeps a missing one answering badEmail, not badBody.
       z.superRefine((data, ctx) => {
         if (!data.email && !data.ctftimeToken) {
           ctx.addIssue({

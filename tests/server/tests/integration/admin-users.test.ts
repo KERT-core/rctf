@@ -368,9 +368,7 @@ describe('admin users', () => {
       division,
     })
 
-    // The live row wins. It used to be replaced, which invalidated the link
-    // the first registrant was about to open and now would overwrite the
-    // password hash riding along with it.
+    // The live row wins; it used to be replaced.
     expect(second.id).toBe(first.id)
     expect(second.token).toBe(first.token)
     expect(await getPendingRegistrationVerification(db, first.id)).toBeDefined()

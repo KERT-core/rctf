@@ -26,6 +26,6 @@ An address that does not parse returns `<response>400 badEmail</response>`. Vali
 
 #### Response
 
-A request that passes validation returns `<response>200 goodVerifySent</response>`. The email points at the frontend reset page, `<dim><origin></dim>/reset-password?token=<dim><reset-token></dim>`, rather than the `/verify` page the register, recover, and email update messages use.
+A request that passes validation returns `<response>200 goodVerifySent</response>`. The email links to `<dim><origin></dim>/reset-password?token=<dim><reset-token></dim>`, not the `/verify` page the other messages use.
 
-The response is identical for an address nobody holds. An unknown address returns `<response>200 goodVerifySent</response>` with no message sent, and a send that fails is logged at error level rather than surfaced, so neither the status nor the body discloses whether an account exists. Because the emailed token grants a password change, mailbox access remains equivalent to account access, the same standing risk [account recovery](/api/auth/recover/) carries.
+An address nobody holds gets the same response with no message sent, and a failed send is logged rather than surfaced, so nothing discloses whether an account exists. As with [account recovery](/api/auth/recover/), mailbox access is equivalent to account access.

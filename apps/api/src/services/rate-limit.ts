@@ -97,8 +97,7 @@ export const rateLimitSetPassword = (redis: TypedRedis, userId: string) =>
 export const rateLimitRegisterByEmail = (redis: TypedRedis, email: string) =>
   rateLimit(redis, `rl:REGISTER_EMAIL:${email}`, 2, 3_600_000)
 
-// burst 2, 1 per 30min per name. Guards the argon2, which the email bucket
-// alone would not: a registration can carry a password on either path.
+// burst 2, 1 per 30min per name; guards the registration argon2
 export const rateLimitRegisterByName = (redis: TypedRedis, name: string) =>
   rateLimit(redis, `rl:REGISTER_NAME:${name.toLowerCase()}`, 2, 3_600_000)
 
@@ -112,8 +111,7 @@ export const rateLimitResetPasswordByEmail = (
   email: string
 ) => rateLimit(redis, `rl:RESET_PASSWORD_EMAIL:${email}`, 2, 3_600_000)
 
-// burst 10, 1 per 10s per IP. The only guard on the argon2 the confirm step
-// runs: the token itself is unguessable, so this meters cost, not guessing.
+// burst 10, 1 per 10s per IP; the only guard on the confirm step's argon2
 export const rateLimitResetPasswordConfirmByIp = (
   redis: TypedRedis,
   ip: string

@@ -36,4 +36,6 @@ A successful reset returns `<response>200 goodPasswordSet</response>`.
 
 ::response-body{def="ConfirmPasswordResetRouteV2" response="goodPasswordSet" title="Response fields"}
 
-Completing a reset raises the [token epoch](/api/auth#token-revocation), so every auth and team token the account was issued earlier stops working and the response hands back a replacement `authToken`. That epoch is also what makes the reset token single use: no marker is stored, and the token that performed the reset was minted before the epoch it set, so a second submission is rejected as revoked. Any reset token minted before some other password change is dead for the same reason, and an unused one expires after `<red>loginTimeout</red>`. An account with no password at all can set its first one here, since the authority behind the token is the mailbox, which recovery already treats as full account access.
+Completing a reset raises the [token epoch](/api/auth#token-revocation), so every auth and team token issued earlier stops working and the response returns a replacement `authToken`. The same epoch makes the reset token single use, and any token minted before another password change is dead for that reason too. An unused one expires after `<red>loginTimeout</red>`.
+
+An account with no password can set its first one here.

@@ -160,10 +160,8 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badEndpoint() }
   }
 
-  // Kept, unlike before, when a password is set. Dropping it was what stopped
-  // an unproven address from being squatted, and the password path now earns
-  // the address the same way every other path does: where a provider is
-  // configured, the row below is pending until the emailed link is opened.
+  // Kept even when a password is set: where a provider is configured the row
+  // below stays pending until the emailed link proves the address.
   const email = body.email ?? null
 
   const division = allowedDivisions({ email, defaultOnly: true })[0]
@@ -186,11 +184,8 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.badKnownEmail() }
   }
 
-  // A pending row holds a name no user row carries yet. Without this the two
-  // registrants race, and whoever opens their link second is told badKnownName
-  // by a claim that has already deleted the row they would have retried with.
-  // Only the name: a repeat submission of the same address has to fall through
-  // to createPendingRegistrationVerification, which resends its live row.
+  // Name only. A repeat submission of the same address falls through to
+  // createPendingRegistrationVerification, which resends its live row.
   const pendingName = await getActivePendingByName(db, body.name)
   if (pendingName && pendingName.email !== email?.toLowerCase()) {
     return { hasResult: true, response: res.badKnownName() }
@@ -220,7 +215,7 @@ const prepareRegistration = async (
     }
   }
 
-  // Resolved before the hash so a bad token does not pay for an argon2.
+  // Before the hash, so a bad token does not pay for an argon2.
   let ctftimeId: string | null = null
   if (body.ctftimeToken) {
     const ctftimeToken = await parseToken(
@@ -234,10 +229,9 @@ const prepareRegistration = async (
     ctftimeId = ctftimeToken.ctftimeId
   }
 
-  // Hashed after every gate, so a rejected request never pays for an argon2,
-  // and before the branch below, which now has to store the hash rather than
-  // create the account. rateLimitRegisterByName is the only guard on this
-  // call, so it moved here with it.
+  // After every gate, so a rejected request never pays for an argon2, and
+  // before the branch below, which stores the hash rather than creating the
+  // account. rateLimitRegisterByName is this call's only guard.
   let passwordHash: string | null = null
   if (body.password) {
     const nameTimeLeft = await rateLimitRegisterByName(redis, body.name)
@@ -269,9 +263,9 @@ const prepareRegistration = async (
     return { hasResult: true, response: res.goodVerifySent() }
   }
 
-  // No provider to verify against, so the account is created immediately and
-  // the address is stored as submitted. Everything that would trust it is
-  // gated on the same config.email: recovery, reset, and the division ACLs.
+  // No provider, so the account is created immediately with the address as
+  // submitted. Everything that would trust it is gated on the same
+  // config.email: recovery, reset, and the division ACLs.
   const userToCreate: UserToCreate = {
     division,
     email,
@@ -429,8 +423,7 @@ export const confirmPasswordReset = async (
     ConfirmPasswordResetResponseHelpers[keyof ConfirmPasswordResetResponseHelpers]
   >
 > => {
-  // Removing the provider revokes every credential derived from email, this
-  // one included. A token stranded mid-flow expires within loginTimeout.
+  // Removing the provider revokes every email-derived credential.
   if (!config.email) {
     return res.badEndpoint()
   }
@@ -456,15 +449,13 @@ export const confirmPasswordReset = async (
     return res.badUnknownUser()
   }
 
-  // This is also what makes the token single use. setUserPassword sets the
-  // epoch to now, so the token that performed a reset fails the inclusive
-  // comparison on its next use - as does any reset token minted before some
-  // other credential change.
+  // Also what makes the token single-use: setUserPassword stamps the epoch
+  // with now, so this comparison rejects it afterwards.
   if (isTokenRevoked(createdAt, credentials.tokenEpoch)) {
     return res.badTokenVerification()
   }
 
-  // An account with no password may set one here. The authority is the
+  // An account with no password may set one here: the authority is the
   // mailbox, which recoverUser already treats as enough for full access.
   const authToken = await setUserPassword(
     db,

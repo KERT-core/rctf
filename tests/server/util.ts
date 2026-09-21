@@ -30,8 +30,8 @@ export const clearDatabase = async () => {
   await db.delete(users)
 }
 
-// The link a flow emailed, taken from the captured plaintext body rather than
-// reconstructed, so a wrong path or a wrong token in the template fails here.
+// Read out of the captured plaintext, so a wrong path or token in the
+// template fails here rather than passing silently.
 export const lastEmailTo = (
   to: string
 ): { subject: string; path: string; token: string } | undefined => {
@@ -52,10 +52,6 @@ export const lastEmailTo = (
     path: link[1]!,
     token: decodeURIComponent(link[2]!),
   }
-}
-
-export const clearSentEmails = () => {
-  sentEmails.length = 0
 }
 
 export const expectResponse = async <T extends ResponseDefinition<string, any>>(

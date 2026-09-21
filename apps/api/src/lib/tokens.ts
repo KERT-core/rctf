@@ -18,9 +18,6 @@ export enum TokenKind {
 
 export type AuthTokenData = string
 export type TeamTokenData = string
-// Its own kind rather than a second VerifyTokenData variant: the v2 verify
-// route applies any Verify-kind token as an email change with no inner-kind
-// guard, so a new variant would silently take that path.
 export type PasswordResetTokenData = string
 
 interface BaseVerifyTokenData {
