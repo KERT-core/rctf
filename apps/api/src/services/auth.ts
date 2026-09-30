@@ -164,6 +164,17 @@ const prepareRegistration = async (
   // below stays pending until the emailed link proves the address.
   const email = body.email ?? null
 
+  // Empty allowlist means any domain is fine.
+  if (
+    config.allowedEmailDomains.length > 0 &&
+    email &&
+    !config.allowedEmailDomains.some(domain =>
+      email.endsWith(`@${domain}`)
+    )
+  ) {
+    return { hasResult: true, response: res.badCompetitionNotAllowed() }
+  }
+
   const division = allowedDivisions({ email, defaultOnly: true })[0]
   if (!division) {
     return { hasResult: true, response: res.badCompetitionNotAllowed() }

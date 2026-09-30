@@ -1,6 +1,7 @@
 import { config } from '@rctf/config'
 import { createDatabase } from '@rctf/db'
 import {
+  BadCompetitionNotAllowed,
   BadEmail,
   BadKnownEmail,
   BadKnownName,
@@ -293,6 +294,48 @@ describe('auth', () => {
       await expectResponse(res, BadRegistrationsDisabled)
     } finally {
       config.registrationsEnabled = oldRegistrations
+    }
+  })
+
+  test('fails with badCompetitionNotAllowed on a disallowed email domain', async () => {
+    const oldDomains = config.allowedEmailDomains
+    config.allowedEmailDomains = ['example.edu']
+
+    try {
+      const res = await request(app, '/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...generateTestUser(),
+          email: `${crypto.randomUUID()}@gmail.com`,
+        }),
+      })
+
+      await expectResponse(res, BadCompetitionNotAllowed)
+    } finally {
+      config.allowedEmailDomains = oldDomains
+    }
+  })
+
+  test('succeeds with goodRegister when the email domain is allowed', async () => {
+    const oldDomains = config.allowedEmailDomains
+    const oldEmail = config.email
+    config.allowedEmailDomains = ['es3n1n.eu']
+    config.email = undefined
+    const user = generateTestUser()
+
+    try {
+      const res = await request(app, '/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user),
+      })
+
+      await expectResponse(res, GoodRegister)
+    } finally {
+      config.allowedEmailDomains = oldDomains
+      config.email = oldEmail
+      await deleteUserByEmail(user.email)
     }
   })
 })

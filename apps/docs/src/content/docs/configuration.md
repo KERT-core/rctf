@@ -231,6 +231,7 @@ registrationsEnabled: true
 userMembers: true
 maxMembers: 50
 loginTimeout: 3600000
+allowedEmailDomains: []
 ctftime:
   clientId: '12345'
   clientSecret: your-secret
@@ -242,6 +243,7 @@ ctftime:
 | `<red>userMembers</red>` | `boolean{:ts}` | `true{:ts}` | Enable team members feature |
 | `<red>maxMembers</red>` | `number{:ts}` | `50{:ts}` | Maximum members per team |
 | `<red>loginTimeout</red>` | `number{:ts}` | `3600000{:ts}` | Verification/CTFtime token expiry in milliseconds (1 hour) |
+| `<red>allowedEmailDomains</red>` | `string[]{:ts}` | `[]{:ts}` | Restrict registration to these email domains; an empty list allows every domain |
 | `<red>ctftime.clientId</red>` | `string{:ts}` | - | CTFtime OAuth client ID (numeric string) |
 | `<red>ctftime.clientSecret</red>` | `string{:ts}` | - | CTFtime OAuth client secret |
 

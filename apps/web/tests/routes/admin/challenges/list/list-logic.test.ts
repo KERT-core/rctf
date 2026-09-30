@@ -137,6 +137,15 @@ describe('filterChallenges', () => {
   test('matches on author', () => {
     expect(filterChallenges(challenges, 'CAROL').map(c => c.id)).toEqual(['c'])
   })
+
+  test('matches on tags case-insensitively', () => {
+    const withTags = [
+      makeChallenge({ id: 't1', tags: ['Beginner'] }),
+      makeChallenge({ id: 't2', tags: ['forensics', 'xor'] }),
+      ...challenges,
+    ]
+    expect(filterChallenges(withTags, 'xor').map(c => c.id)).toEqual(['t2'])
+  })
 })
 
 describe('accordionValue', () => {

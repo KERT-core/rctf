@@ -65,7 +65,9 @@ export function filterChallenges(
     return (
       challenge.name.toLowerCase().includes(needle) ||
       challenge.category.toLowerCase().includes(needle) ||
-      challenge.author.toLowerCase().includes(needle)
+      challenge.author.toLowerCase().includes(needle) ||
+      (challenge.tags?.some(tag => tag.toLowerCase().includes(needle)) ??
+        false)
     )
   })
 }

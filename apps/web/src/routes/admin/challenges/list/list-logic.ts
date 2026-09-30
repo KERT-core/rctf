@@ -41,7 +41,13 @@ export function filterChallenges(
     return challenges
   }
   return challenges.filter(challenge =>
-    searchMatches(needle, challenge.name, challenge.category, challenge.author)
+    searchMatches(
+      needle,
+      challenge.name,
+      challenge.category,
+      challenge.author,
+      ...(challenge.tags ?? [])
+    )
   )
 }
 
