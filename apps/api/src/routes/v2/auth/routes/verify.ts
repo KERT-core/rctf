@@ -11,7 +11,7 @@ import {
   redeemTeamToken,
   updateUserEmail,
 } from '../../../../services/users'
-import { divisionAllowed } from '../../../../util/acl'
+import { divisionAllowed, isEmailDomainAllowed } from '../../../../util/acl'
 import authGroup from '../group'
 
 authGroup.route(VerifyRouteV2, async ({ ctx, body, res }) => {
@@ -66,6 +66,10 @@ authGroup.route(VerifyRouteV2, async ({ ctx, body, res }) => {
   }
 
   if (!divisionAllowed(data.email, user.division)) {
+    return res.badEmailChangeDivision()
+  }
+
+  if (!isEmailDomainAllowed(data.email)) {
     return res.badEmailChangeDivision()
   }
 

@@ -27,7 +27,7 @@ import {
   parseTokenWithMultipleKinds,
   TokenKind,
 } from '../lib/tokens'
-import { allowedDivisions } from '../util/acl'
+import { allowedDivisions, isEmailDomainAllowed } from '../util/acl'
 import { trySendVerificationEmail } from './emails'
 import {
   checkPassword,
@@ -165,11 +165,7 @@ const prepareRegistration = async (
   const email = body.email ?? null
 
   // Empty allowlist means any domain is fine.
-  if (
-    config.allowedEmailDomains.length > 0 &&
-    email &&
-    !config.allowedEmailDomains.some(domain => email.endsWith(`@${domain}`))
-  ) {
+  if (email && !isEmailDomainAllowed(email)) {
     return { hasResult: true, response: res.badCompetitionNotAllowed() }
   }
 

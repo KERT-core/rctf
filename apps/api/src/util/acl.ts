@@ -79,3 +79,10 @@ export const divisionAllowed = (
     defaultOnly: false,
   }).includes(division)
 }
+
+// Registration restricts sign-ups to these domains; email changes must clear
+// the same gate, or an allowed-domain account can re-home itself to any other
+// address right after registering.
+export const isEmailDomainAllowed = (email: string): boolean =>
+  config.allowedEmailDomains.length === 0 ||
+  config.allowedEmailDomains.some(domain => email.endsWith(`@${domain}`))
