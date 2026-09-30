@@ -168,9 +168,7 @@ const prepareRegistration = async (
   if (
     config.allowedEmailDomains.length > 0 &&
     email &&
-    !config.allowedEmailDomains.some(domain =>
-      email.endsWith(`@${domain}`)
-    )
+    !config.allowedEmailDomains.some(domain => email.endsWith(`@${domain}`))
   ) {
     return { hasResult: true, response: res.badCompetitionNotAllowed() }
   }
