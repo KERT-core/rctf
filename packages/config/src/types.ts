@@ -92,6 +92,7 @@ export const ServerConfigSchema = z.object({
   userMembers: z._default(z.boolean(), true),
   maxMembers: z._default(z.number(), 50),
   loginTimeout: z._default(z.number(), 3_600_000),
+  allowedEmailDomains: z._default(z.array(z.string()), []),
   ctftime: z.optional(
     z.object({
       clientId: NumericString,

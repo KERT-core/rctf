@@ -221,6 +221,20 @@ describe('filterChallenges', () => {
     expect(result.map(challenge => challenge.id)).toEqual(['3'])
   })
 
+  test('matches on tags case-insensitively', () => {
+    const withTags = [
+      makeChallenge({ id: 't1', tags: ['Beginner'] }),
+      makeChallenge({ id: 't2', tags: ['forensics', 'xor'] }),
+      ...challenges,
+    ]
+    const result = filterChallenges(withTags, {
+      query: 'XOR',
+      hideSolved: false,
+      solvedIds: new Set(),
+    })
+    expect(result.map(challenge => challenge.id)).toEqual(['t2'])
+  })
+
   test('treats whitespace-only queries as no query', () => {
     const result = filterChallenges(challenges, {
       query: '   ',

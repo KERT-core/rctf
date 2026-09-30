@@ -27,7 +27,7 @@ import {
   parseTokenWithMultipleKinds,
   TokenKind,
 } from '../lib/tokens'
-import { allowedDivisions } from '../util/acl'
+import { allowedDivisions, isEmailDomainAllowed } from '../util/acl'
 import { trySendVerificationEmail } from './emails'
 import {
   checkPassword,
@@ -163,6 +163,11 @@ const prepareRegistration = async (
   // Kept even when a password is set: where a provider is configured the row
   // below stays pending until the emailed link proves the address.
   const email = body.email ?? null
+
+  // Empty allowlist means any domain is fine.
+  if (email && !isEmailDomainAllowed(email)) {
+    return { hasResult: true, response: res.badCompetitionNotAllowed() }
+  }
 
   const division = allowedDivisions({ email, defaultOnly: true })[0]
   if (!division) {
