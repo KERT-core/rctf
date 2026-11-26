@@ -34,15 +34,20 @@ export const UserEmail = z
   )
   .check(z.describe('Email address. Normalized to lowercase and trimmed.'))
 
+// Printable ASCII, the modern Hangul compatibility jamo and the composed Hangul
+// syllables. The jamo range stops at U+3163: U+3164 is the invisible Hangul
+// filler, which would let a name render as blank.
+const USER_NAME_PATTERN = /^[ -~ㄱ-ㅣ가-힣]{2,64}$/
+
 export const UserName = z
   .pipe(z.string(), z.transform(normalizeName))
   .check(
-    z.refine((name: string) => /^[ -~]{2,64}$/.test(name), {
-      message: 'Name must be 2-64 printable characters',
+    z.refine((name: string) => USER_NAME_PATTERN.test(name), {
+      message: 'Name must be 2-64 printable ASCII or Hangul characters',
       params: { response: BadName },
     })
   )
-  .check(z.describe('2-64 printable ASCII characters.'))
+  .check(z.describe('2-64 printable ASCII or Hangul characters.'))
 
 // Longest address RFC 5321 allows, and the widest thing this can hold: a team
 // name is capped well below it.
@@ -57,7 +62,7 @@ export const MIN_IDENTIFIER_LENGTH = 2
 export const UserIdentifier = z
   .pipe(
     z.string(),
-    z.transform((value: string) => value.trim().toLowerCase())
+    z.transform((value: string) => value.trim().normalize('NFC').toLowerCase())
   )
   .check(
     z.refine(
@@ -70,7 +75,11 @@ export const UserIdentifier = z
       }
     )
   )
-  .check(z.describe('Team name or email address. Trimmed and lowercased.'))
+  .check(
+    z.describe(
+      'Team name or email address. Trimmed, NFC-normalized and lowercased.'
+    )
+  )
 
 export const MIN_PASSWORD_LENGTH = 8
 export const MAX_PASSWORD_LENGTH = 128

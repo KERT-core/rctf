@@ -5,6 +5,7 @@ import {
   BadEmail,
   BadKnownEmail,
   BadKnownName,
+  BadName,
   BadRegistrationsDisabled,
   GoodLogin,
   GoodRegister,
@@ -246,6 +247,76 @@ describe('auth', () => {
     } finally {
       await deleteUserByEmail(mixedCase.email)
     }
+  })
+
+  test('registers a Hangul team name', async () => {
+    config.email = undefined
+
+    const hangul = {
+      ...generateTestUser(),
+      name: `25_홍길동_${crypto.randomUUID()}`,
+    }
+    const res = await request(app, '/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hangul),
+    })
+
+    try {
+      await expectResponse(res, GoodRegister)
+      const user = await getUserByEmail(hangul.email)
+      expect(user?.name).toBe(hangul.name)
+    } finally {
+      await deleteUserByEmail(hangul.email)
+    }
+  })
+
+  test('a decomposed Hangul name is stored composed and collides with it', async () => {
+    config.email = undefined
+
+    const composed = {
+      ...generateTestUser(),
+      name: `한글팀_${crypto.randomUUID()}`,
+    }
+    const decomposedName = composed.name.normalize('NFD')
+    expect(decomposedName).not.toBe(composed.name)
+
+    const created = await request(app, '/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...composed, name: decomposedName }),
+    })
+
+    try {
+      await expectResponse(created, GoodRegister)
+      const user = await getUserByEmail(composed.email)
+      expect(user?.name).toBe(composed.name)
+
+      const res = await request(app, '/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...generateTestUser(), name: composed.name }),
+      })
+      await expectResponse(res, BadKnownName)
+    } finally {
+      await deleteUserByEmail(composed.email)
+    }
+  })
+
+  test.each([
+    ['the Hangul filler', '한글ㅤ팀'],
+    ['a zero-width space', '한글​팀'],
+    ['a script other than Latin and Hangul', 'テストチーム'],
+  ])('rejects a name with %s as badName', async (_label, name) => {
+    config.email = undefined
+
+    const res = await request(app, '/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...generateTestUser(), name }),
+    })
+
+    await expectResponse(res, BadName)
   })
 
   test('succeeds with goodUserUpdate', async () => {
