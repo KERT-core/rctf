@@ -9,5 +9,5 @@ export function normalizeEmail(email: string): string {
 }
 
 export function normalizeName(name: string): string {
-  return name.trim()
+  return name.trim().normalize('NFC')
 }

@@ -349,6 +349,19 @@ describe('password login', () => {
     await expectResponse(res, GoodLogin)
   })
 
+  test('matches a Hangul name whether it is typed composed or decomposed', async () => {
+    const name = `25_홍길동_${crypto.randomUUID()}`
+    await registerWithPassword({ name })
+
+    for (const identifier of [name, name.normalize('NFD')]) {
+      const res = await post('/api/v2/auth/login', {
+        identifier,
+        password: PASSWORD,
+      })
+      await expectResponse(res, GoodLogin)
+    }
+  })
+
   test('answers badCredentials for a wrong password', async () => {
     const { name } = await registerWithPassword()
 
